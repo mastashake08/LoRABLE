@@ -17,6 +17,7 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <Update.h>
+#include <heltec_unofficial.h>
 #include "BLEManager.h"
 #include "LoRAManager.h"
 #include "ConfigManager.h"

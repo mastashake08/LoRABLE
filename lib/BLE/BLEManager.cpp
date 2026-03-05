@@ -286,19 +286,27 @@ void BLEManager::updateBatteryLevel(uint8_t level) {
 }
 
 uint8_t BLEManager::getBatteryLevel() {
-    // Read battery voltage from ADC (GPIO1 on Heltec V3)
-    // Heltec V3 has Vbat connected to GPIO1 through voltage divider
-    // ADC range: 0-3.3V, Battery range: 3.0-4.2V (through divider)
+    // Use Heltec library's battery functions for accurate reading
+    // Requires heltec_unofficial.h to be included in main.cpp
+    // Heltec V3: VBAT_CTRL (GPIO37) enables reading, VBAT_ADC (GPIO1) reads voltage
+    // Through voltage divider: R1=390K, R2=100K
     
-    #ifdef ADC_VBAT
-        int adcValue = analogRead(ADC_VBAT);
+    #ifdef VBAT_ADC
+        // Control pin to enable battery voltage reading
+        pinMode(VBAT_CTRL, OUTPUT);
+        digitalWrite(VBAT_CTRL, LOW);
+        delay(5);
         
-        // Convert ADC value to voltage (ESP32-S3 12-bit ADC, 0-4095)
-        // Voltage divider: R1=390K, R2=100K (divides by 4.9)
-        float voltage = (adcValue / 4095.0) * 3.3 * 4.9;
+        // Read ADC value and convert to voltage
+        // Formula from Heltec library: ADC / 238.7 gives voltage
+        float vbat = analogRead(VBAT_ADC) / 238.7;
         
-        // Convert voltage to percentage (3.0V = 0%, 4.2V = 100%)
-        float percentage = ((voltage - 3.0) / (4.2 - 3.0)) * 100.0;
+        // Reset control pin
+        pinMode(VBAT_CTRL, INPUT);
+        
+        // Convert voltage to percentage
+        // LiPo: 3.0V = 0%, 4.2V = 100%
+        float percentage = ((vbat - 3.0) / (4.2 - 3.0)) * 100.0;
         
         // Clamp to 0-100
         if (percentage < 0) percentage = 0;
