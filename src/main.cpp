@@ -466,14 +466,36 @@ void onGPIOControl(const String& command) {
     pinStr.trim();
     stateStr.trim();
     
+    Serial.print("Parsed pin: '");
+    Serial.print(pinStr);
+    Serial.print("' state: '");
+    Serial.print(stateStr);
+    Serial.println("'");
+    
     int pin = pinStr.toInt();
     int state = stateStr.toInt();
     
-    // Validate pin number (ESP32 valid GPIO pins)
-    if (pin < 0 || pin > 48) {
-        Serial.print("ERROR: Invalid GPIO pin: ");
+    Serial.print("Converted pin: ");
+    Serial.print(pin);
+    Serial.print(" state: ");
+    Serial.println(state);
+    
+    // Validate pin number (ESP32-S3 valid GPIO pins)
+    // Restricted pins on Heltec V3:
+    // 8-14: LoRA (SCK, MISO, MOSI, NSS, RST, DIO1, BUSY)
+    // 17, 18, 21: OLED (SDA, SCL, RST)
+    // 19, 20: USB
+    // 26-32: Flash memory
+    // 36: VEXT (power control)
+    if (pin < 0 || pin > 48 || 
+        (pin >= 8 && pin <= 14) ||   // LoRA pins
+        (pin >= 17 && pin <= 21) ||  // OLED pins + 19-20 USB
+        (pin >= 26 && pin <= 32) ||  // Flash pins
+        pin == 36) {                 // VEXT
+        Serial.print("ERROR: Invalid/Reserved GPIO pin: ");
         Serial.println(pin);
-        showStatus("Invalid Pin!");
+        Serial.println("Reserved: 8-14 (LoRA), 17-21 (OLED/USB), 26-32 (Flash), 36 (VEXT)");
+        showStatus("Pin Reserved!");
         delay(1500);
         updateStatusDisplay(bleManager.isConnected(), loraManager.getSyncWord(), lastReceivedMessage);
         return;
@@ -489,11 +511,28 @@ void onGPIOControl(const String& command) {
         return;
     }
     
+    // Warn about strapping pins (can still be used but may affect boot)
+    if (pin == 0 || pin == 3 || pin == 45 || pin == 46) {
+        Serial.print("WARNING: GPIO ");
+        Serial.print(pin);
+        Serial.println(" is a strapping pin. Use with caution!");
+    }
+    
     // Configure and set GPIO
+    Serial.print("Setting pinMode for GPIO ");
+    Serial.print(pin);
+    Serial.println(" to OUTPUT...");
+    
     pinMode(pin, OUTPUT);
+    
+    Serial.print("Setting GPIO ");
+    Serial.print(pin);
+    Serial.print(" to ");
+    Serial.println(state ? "HIGH" : "LOW");
+    
     digitalWrite(pin, state);
     
-    Serial.print("GPIO ");
+    Serial.print("SUCCESS: GPIO ");
     Serial.print(pin);
     Serial.print(" set to ");
     Serial.println(state ? "HIGH" : "LOW");
