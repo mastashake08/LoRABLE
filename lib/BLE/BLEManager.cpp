@@ -26,7 +26,7 @@ public:
 // Characteristic callbacks for read/write events
 class BLEManager::CharacteristicCallbacks: public BLECharacteristicCallbacks {
 public:
-    enum CharType { SYNCWORD, MESSAGE, WIFI_SSID, WIFI_PASSWORD, DEVICE_NAME, GPIO_CONTROL };
+    enum CharType { SYNCWORD, MESSAGE, WIFI_SSID, WIFI_PASSWORD, DEVICE_NAME, GPIO_CONTROL, LED_CONTROL };
     
     CharacteristicCallbacks(BLEManager* mgr, CharType type) 
         : manager(mgr), charType(type) {}
@@ -97,6 +97,17 @@ private:
                         manager->gpioCallback(value);
                     }
                     break;
+                    
+                case LED_CONTROL:
+                    {
+                        uint8_t ledState = (uint8_t)value[0];
+                        Serial.print("Received LED control via BLE: ");
+                        Serial.println(ledState ? "ON" : "OFF");
+                        if (manager->ledCallback != nullptr) {
+                            manager->ledCallback(ledState);
+                        }
+                    }
+                    break;
             }
         }
     }
@@ -118,6 +129,7 @@ BLEManager::BLEManager()
       pWiFiPasswordCharacteristic(nullptr),
       pDeviceNameCharacteristic(nullptr),
       pGPIOControlCharacteristic(nullptr),
+      pLEDControlCharacteristic(nullptr),
       deviceConnected(false),
       currentSyncWord(0x12),  // Default syncWord
       batteryLevel(100),     // Default battery level
@@ -128,7 +140,8 @@ BLEManager::BLEManager()
       messageCallback(nullptr),
       wifiCallback(nullptr),
       deviceNameCallback(nullptr),
-      gpioCallback(nullptr) {
+      gpioCallback(nullptr),
+      ledCallback(nullptr) {
 }
 
 bool BLEManager::init() {
@@ -258,6 +271,26 @@ bool BLEManager::init() {
     
     Serial.println("GPIO Control characteristic created");
     
+    // Create LED Control Characteristic
+    pLEDControlCharacteristic = pService->createCharacteristic(
+        LED_CONTROL_CHAR_UUID,
+        BLECharacteristic::PROPERTY_READ |
+        BLECharacteristic::PROPERTY_WRITE
+    );
+    
+    // Set LED Control characteristic callbacks
+    pLEDControlCharacteristic->setCallbacks(new CharacteristicCallbacks(this, CharacteristicCallbacks::LED_CONTROL));
+    
+    // Add descriptor for user-friendly name
+    BLEDescriptor *pLEDDescriptor = new BLEDescriptor((uint16_t)0x2901);
+    pLEDDescriptor->setValue("LED Control");
+    pLEDControlCharacteristic->addDescriptor(pLEDDescriptor);
+    
+    uint8_t ledDefaultState = 0;  // Default: LED OFF
+    pLEDControlCharacteristic->setValue(&ledDefaultState, 1);
+    
+    Serial.println("LED Control characteristic created");
+    
     // Start LoRABLE service
     pService->start();
     Serial.println("LoRABLE service started");
@@ -336,6 +369,10 @@ void BLEManager::setDeviceNameCallback(void (*callback)(const String&)) {
 
 void BLEManager::setGPIOCallback(void (*callback)(const String&)) {
     gpioCallback = callback;
+}
+
+void BLEManager::setLEDCallback(void (*callback)(uint8_t)) {
+    ledCallback = callback;
 }
 
 bool BLEManager::isConnected() {

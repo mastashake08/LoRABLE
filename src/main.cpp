@@ -36,6 +36,9 @@
 // #define POT_VCC 19     // GPIO 19 for potentiometer VCC (power)
 // #define POT_GND 48     // GPIO 48 for potentiometer GND (reference)
 
+// Built-in White LED
+#define LED_WHITE 35  // GPIO 35 for built-in white LED on Heltec V3
+
 // U8g2 Constructor for SSD1306 128x64 I2C display
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, OLED_RST, OLED_SCL, OLED_SDA);
 
@@ -99,51 +102,51 @@ void initDisplay() {
 }
 
 /**
- * Update display brightness based on potentiometer reading
+ * Update display brightness based on potentiometer reading (DISABLED)
  * GPIO 21 reads 0-4095 (12-bit ADC)
  * Maps to 0-255 brightness (0 = display off)
  */
-void updateDisplayBrightness() {
-    // Read potentiometer value (0-4095 for ESP32 12-bit ADC)
-    int potValue = analogRead(POT_PIN);
-    
-    // Map to brightness range 0-255
-    uint8_t brightness = map(potValue, 0, 4095, 0, 255);
-    
-    // Add hysteresis to prevent flickering at threshold
-    const int THRESHOLD = 10;  // Brightness threshold for turning off display
-    
-    if (brightness < THRESHOLD && displayPoweredOn) {
-        // Turn off display completely
-        digitalWrite(VEXT_CTRL, HIGH);  // HIGH = OFF for Heltec V3
-        displayPoweredOn = false;
-        currentBrightness = 0;
-        
-        Serial.println("Display OFF (brightness = 0)");
-    } 
-    else if (brightness >= THRESHOLD && !displayPoweredOn) {
-        // Turn on display
-        digitalWrite(VEXT_CTRL, LOW);  // LOW = ON for Heltec V3
-        delay(50);  // Give display time to power on
-        displayPoweredOn = true;
-        
-        Serial.print("Display ON (brightness = ");
-        Serial.print(brightness);
-        Serial.println(")");
-    }
-    
-    // Update contrast only if display is on and brightness changed significantly
-    if (displayPoweredOn && abs(brightness - currentBrightness) > 5) {
-        u8g2.setContrast(brightness);
-        currentBrightness = brightness;
-        
-        Serial.print("Brightness adjusted: ");
-        Serial.print(brightness);
-        Serial.print(" (pot value: ");
-        Serial.print(potValue);
-        Serial.println(")");
-    }
-}
+// void updateDisplayBrightness() {
+//     // Read potentiometer value (0-4095 for ESP32 12-bit ADC)
+//     int potValue = analogRead(POT_PIN);
+//     
+//     // Map to brightness range 0-255
+//     uint8_t brightness = map(potValue, 0, 4095, 0, 255);
+//     
+//     // Add hysteresis to prevent flickering at threshold
+//     const int THRESHOLD = 10;  // Brightness threshold for turning off display
+//     
+//     if (brightness < THRESHOLD && displayPoweredOn) {
+//         // Turn off display completely
+//         digitalWrite(VEXT_CTRL, HIGH);  // HIGH = OFF for Heltec V3
+//         displayPoweredOn = false;
+//         currentBrightness = 0;
+//         
+//         Serial.println("Display OFF (brightness = 0)");
+//     } 
+//     else if (brightness >= THRESHOLD && !displayPoweredOn) {
+//         // Turn on display
+//         digitalWrite(VEXT_CTRL, LOW);  // LOW = ON for Heltec V3
+//         delay(50);  // Give display time to power on
+//         displayPoweredOn = true;
+//         
+//         Serial.print("Display ON (brightness = ");
+//         Serial.print(brightness);
+//         Serial.println(")");
+//     }
+//     
+//     // Update contrast only if display is on and brightness changed significantly
+//     if (displayPoweredOn && abs(brightness - currentBrightness) > 5) {
+//         u8g2.setContrast(brightness);
+//         currentBrightness = brightness;
+//         
+//         Serial.print("Brightness adjusted: ");
+//         Serial.print(brightness);
+//         Serial.print(" (pot value: ");
+//         Serial.print(potValue);
+//         Serial.println(")");
+//     }
+// }
 
 void showStartupScreen() {
     u8g2.clearBuffer();
@@ -523,6 +526,25 @@ void onDeviceNameChanged(const String& newName) {
 }
 
 /**
+ * Callback function called when LED state is changed via BLE
+ * @param state 0 = OFF, 1 = ON
+ */
+void onLEDControl(uint8_t state) {
+    Serial.print("=== LED Control via BLE ===");
+    Serial.print(" State: ");
+    Serial.println(state ? "ON" : "OFF");
+    
+    digitalWrite(LED_WHITE, state);
+    
+    String displayMsg = "LED: " + String(state ? "ON" : "OFF");
+    showStatus(displayMsg);
+    delay(1500);
+    
+    // Return to normal display
+    updateStatusDisplay(bleManager.isConnected(), loraManager.getSyncWord(), lastReceivedMessage);
+}
+
+/**
  * Callback function called when GPIO control command is received
  * Format: "pin,state" (e.g., "5,1" for GPIO 5 HIGH, "13,0" for GPIO 13 LOW)
  */
@@ -704,6 +726,11 @@ void setup() {
     Serial.print(" / ");
     Serial.println(ESP.getFreeSketchSpace());
     
+    // Initialize white LED
+    pinMode(LED_WHITE, OUTPUT);
+    digitalWrite(LED_WHITE, LOW);  // Start with LED off
+    Serial.println("White LED initialized (GPIO 35)");
+    
     // Initialize Display
     Serial.println("Initializing display...");
     initDisplay();
@@ -806,6 +833,7 @@ void setup() {
     bleManager.setDeviceNameCallback(onDeviceNameChanged);
     bleManager.setWiFiCallback(onWiFiCredentialsChanged);
     bleManager.setGPIOCallback(onGPIOControl);
+    bleManager.setLEDCallback(onLEDControl);
     // Set initial syncWord in BLE characteristic
     bleManager.setSyncWord(savedSyncWord);
     
