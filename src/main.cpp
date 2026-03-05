@@ -31,10 +31,10 @@
 #define OLED_RST 255  // Reset not used (GPIO 21 repurposed for potentiometer)
 #define VEXT_CTRL 36  // Display power control
 
-// Potentiometer for brightness control
-#define POT_PIN 21     // GPIO 21 for brightness potentiometer (ADC/Data)
-#define POT_VCC 19     // GPIO 19 for potentiometer VCC (power)
-#define POT_GND 48     // GPIO 48 for potentiometer GND (reference)
+// Potentiometer for brightness control (DISABLED)
+// #define POT_PIN 21     // GPIO 21 for brightness potentiometer (ADC/Data)
+// #define POT_VCC 19     // GPIO 19 for potentiometer VCC (power)
+// #define POT_GND 48     // GPIO 48 for potentiometer GND (reference)
 
 // U8g2 Constructor for SSD1306 128x64 I2C display
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, OLED_RST, OLED_SCL, OLED_SDA);
@@ -83,19 +83,19 @@ void initDisplay() {
     u8g2.setFontPosTop();
     u8g2.setFontDirection(0);
     
-    // Setup potentiometer pins for brightness control
-    pinMode(POT_VCC, OUTPUT);
-    digitalWrite(POT_VCC, HIGH);  // Provide 3.3V power to potentiometer
+    // Setup potentiometer pins for brightness control (DISABLED)
+    // pinMode(POT_VCC, OUTPUT);
+    // digitalWrite(POT_VCC, HIGH);  // Provide 3.3V power to potentiometer
     
-    pinMode(POT_GND, OUTPUT);
-    digitalWrite(POT_GND, LOW);   // Provide GND reference to potentiometer
+    // pinMode(POT_GND, OUTPUT);
+    // digitalWrite(POT_GND, LOW);   // Provide GND reference to potentiometer
     
-    pinMode(POT_PIN, INPUT);      // Configure as analog input
+    // pinMode(POT_PIN, INPUT);      // Configure as analog input
     
-    Serial.println("Potentiometer initialized:");
-    Serial.println("  VCC: GPIO 19 (HIGH)");
-    Serial.println("  Data: GPIO 21 (ADC)");
-    Serial.println("  GND: GPIO 48 (LOW)");
+    // Serial.println("Potentiometer initialized:");
+    // Serial.println("  VCC: GPIO 19 (HIGH)");
+    // Serial.println("  Data: GPIO 21 (ADC)");
+    // Serial.println("  GND: GPIO 48 (LOW)");
 }
 
 /**
@@ -895,11 +895,11 @@ void loop() {
         lastBatteryUpdate = millis();
     }
     
-    // Update display brightness based on potentiometer
-    if (millis() - lastBrightnessUpdate > BRIGHTNESS_UPDATE_INTERVAL) {
-        updateDisplayBrightness();
-        lastBrightnessUpdate = millis();
-    }
+    // Update display brightness based on potentiometer (DISABLED)
+    // if (millis() - lastBrightnessUpdate > BRIGHTNESS_UPDATE_INTERVAL) {
+    //     updateDisplayBrightness();
+    //     lastBrightnessUpdate = millis();
+    // }
     
     // Small delay to prevent CPU hogging
     delay(10);
