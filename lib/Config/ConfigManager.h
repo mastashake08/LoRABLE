@@ -15,6 +15,7 @@
 #define KEY_TX_POWER    "txPower"
 #define KEY_WIFI_SSID   "wifiSSID"
 #define KEY_WIFI_PASSWORD "wifiPassword"
+#define KEY_DEVICE_NAME "deviceName"
 
 /**
  * ConfigManager - Manages persistent configuration storage
@@ -113,6 +114,19 @@ public:
      * Clear WiFi credentials from storage
      */
     void clearWiFiCredentials();
+    
+    /**
+     * Save device name to persistent storage
+     * @param name Device name
+     */
+    void saveDeviceName(const String& name);
+    
+    /**
+     * Load device name from persistent storage
+     * @param defaultValue Default device name if not found
+     * @return Stored device name or default value
+     */
+    String loadDeviceName(const String& defaultValue = "LoRABLE");
     
     /**
      * Clear all stored preferences

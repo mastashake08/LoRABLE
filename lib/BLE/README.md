@@ -7,6 +7,8 @@ The BLE module manages Bluetooth Low Energy operations for the LoRABLE applicati
 - BLE server initialization with custom service UUID
 - SyncWord characteristic (read/write/notify)
 - Message characteristic (read/write) for sending LoRA messages
+- WiFi credentials characteristics for OTA updates
+- Device name characteristic for customizing BLE device name
 - Battery Service (standard Bluetooth SIG service)
 - Connection/disconnection event handling
 - Callback mechanisms for syncWord changes and message reception
@@ -31,10 +33,24 @@ void onMessageReceived(const String& message) {
     // Send via LoRA
 }
 
+void onWiFiChanged(const String& ssid, const String& password) {
+    Serial.print("WiFi configured: ");
+    Serial.println(ssid);
+    // Save credentials for OTA
+}
+
+void onDeviceNameChanged(const String& newName) {
+    Serial.print("Device name changed to: ");
+    Serial.println(newName);
+    // Save for next boot
+}
+
 void setup() {
     bleManager.init();
     bleManager.setSyncWordCallback(onSyncWordChanged);
     bleManager.setMessageCallback(onMessageReceived);
+    bleManager.setWiFiCallback(onWiFiChanged);
+    bleManager.setDeviceName (customizable via characteristic)Callback(onDeviceNameChanged);
 }
 
 void loop() {
@@ -50,16 +66,43 @@ void loop() {
 - **Service UUID**: `4fafc201-1fb5-459e-8fcc-c5c9c331914b`
 - **Device Name**: `LoRABLE`
 
+### WiFi SSID Characteristic
+- **UUID**: `7c8a8e48-68c9-4e3f-a3e6-8f6e7b8c9d0a`
+- **Properties**: Read, Write
+- **Data Type**: String
+- **Description**: WiFi network SSID for OTA updates
+- **User Description**: "WiFi SSID"
+
+### WiFi Password Characteristic
+- **UUID**: `8d9b9f59-79da-4f40-b4f7-9f7e8c9d0e1b`
+- **Properties**: Write
+- **Data Type**: String
+- **Description**: WiFi network password for OTA updates
+- **User Description**: "WiFi Password"
+
+### Device Name Characteristic
+- **UUID**: `9e0c0a1f-8a9c-4f50-b5d8-0f8f9e0d1f2a`
+- **Properties**: Read, Write
+- **Data Type**: String
+- **Description**: BLE device name (requires reboot to take effect)
+- **User Description**: "Device Name"
+
 ### SyncWord Characteristic
 - **UUID**: `beb5483e-36e1-4688-b7f5-ea07361b26a8`
 - **Properties**: Read, Write, Notify
 - **Data Type**: 1 byte (0x00 - 0xFF)
 - **Description**: LoRA syncWord for network separation
-- **User Description**: "Sync Word"
+- **User Description**: "Syn (or your custom name)
+3. Connect to the device
+4. You should see two services:
+   - **LoRABLE Custom Service** (4fafc201...)
+   - **Battery Service** (0x180F)
 
-### Message Characteristic
-- **UUID**: `a3c87500-8ed3-4bdf-8a39-a01bebede295`
-- **Properties**: Read, Write
+**To change device name:**
+5. Navigate to LoRABLE service
+6. Find "Device Name" characteristic
+7. Write your desired name (e.g., "MyLoRA")
+8. **Reboot device** to see the new name
 - **Data Type**: String (up to 255 bytes)
 - **Description**: Message to send via LoRA
 - **User Description**: "LoRA Message"

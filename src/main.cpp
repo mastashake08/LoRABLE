@@ -418,6 +418,30 @@ void onSyncWordChanged(uint8_t newSyncWord) {
     lastDisplayUpdate = millis();
 }
 
+/**
+ * Callback function called when device name is changed via BLE
+ * Saves device name to persistent storage
+ */
+void onDeviceNameChanged(const String& newName) {
+    Serial.println("=== Device Name Changed ===");
+    Serial.print("New Device Name: ");
+    Serial.println(newName);
+    
+    // Save to configuration
+    configManager.saveDeviceName(newName);
+    
+    // Update display
+    showStatus("Name Updated!");
+    delay(1500);
+    showStatus("Reboot to apply");
+    delay(2000);
+    
+    // Return to normal display
+    updateStatusDisplay(bleManager.isConnected(), loraManager.getSyncWord(), lastReceivedMessage);
+    
+    Serial.println("Device name will be applied on next reboot");
+}
+
 void setup() {
     // Initialize Serial
     Serial.begin(115200);
@@ -462,6 +486,16 @@ void setup() {
     
     // Load saved configuration
     uint8_t savedSyncWord = configManager.loadSyncWord();
+    String savedDeviceName = configManager.loadDeviceName();  // Load device name
+    
+    // Initialize Heltec hardware (this sets up the radio SPI and other hardware)
+    Serial.println("Initializing Heltec hardware...");
+    heltec_setup();
+    Serial.println("Heltec hardware initialized");
+    
+    // Re-initialize display with our custom settings (heltec_setup may have changed it)
+    initDisplay();
+    showStartupScreen();
     
     // Initialize LoRA
     if (!loraManager.init()) {
@@ -504,7 +538,8 @@ void setup() {
     }
     Serial.println("=== WiFi OFF - BLE Mode ===");
     
-    // Initialize BLE
+    // Initialize BLE with saved device name
+    bleManager.setDeviceName(savedDeviceName);  // Set device name before init
     if (!bleManager.init()) {
         Serial.println("ERROR: BLE initialization failed!");
         showStatus("BLE Failed!");
@@ -514,6 +549,7 @@ void setup() {
     Serial.println("Setting up BLE callbacks...");
     bleManager.setSyncWordCallback(onSyncWordChanged);
     bleManager.setMessageCallback(onMessageReceived);
+    bleManager.setDeviceNameCallback(onDeviceNameChanged);
     bleManager.setWiFiCallback(onWiFiCredentialsChanged);
     // Set initial syncWord in BLE characteristic
     bleManager.setSyncWord(savedSyncWord);

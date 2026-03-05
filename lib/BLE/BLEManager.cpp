@@ -26,7 +26,7 @@ public:
 // Characteristic callbacks for read/write events
 class BLEManager::CharacteristicCallbacks: public BLECharacteristicCallbacks {
 public:
-    enum CharType { SYNCWORD, MESSAGE, WIFI_SSID, WIFI_PASSWORD };
+    enum CharType { SYNCWORD, MESSAGE, WIFI_SSID, WIFI_PASSWORD, DEVICE_NAME };
     
     CharacteristicCallbacks(BLEManager* mgr, CharType type) 
         : manager(mgr), charType(type) {}
@@ -78,6 +78,17 @@ private:
                         manager->wifiCallback(manager->wifiSSID, manager->wifiPassword);
                     }
                     break;
+                    
+                case DEVICE_NAME:
+                    manager->deviceName = value;
+                    Serial.print("Received new device name via BLE: ");
+                    Serial.println(value);
+                    // Update the BLE device name
+                    BLEDevice::init(value.c_str());
+                    if (manager->deviceNameCallback != nullptr) {
+                        manager->deviceNameCallback(value);
+                    }
+                    break;
             }
         }
     }
@@ -97,21 +108,24 @@ BLEManager::BLEManager()
       pBatteryLevelCharacteristic(nullptr),
       pWiFiSSIDCharacteristic(nullptr),
       pWiFiPasswordCharacteristic(nullptr),
+      pDeviceNameCharacteristic(nullptr),
       deviceConnected(false),
       currentSyncWord(0x12),  // Default syncWord
       batteryLevel(100),     // Default battery level
       wifiSSID(""),
       wifiPassword(""),
+      deviceName("LoRABLE"),  // Default device name
       syncWordCallback(nullptr),
       messageCallback(nullptr),
-      wifiCallback(nullptr) {
+      wifiCallback(nullptr),
+      deviceNameCallback(nullptr) {
 }
 
 bool BLEManager::init() {
     Serial.println("Initializing BLE...");
     
-    // Initialize BLE Device
-    BLEDevice::init("LoRABLE");
+    // Initialize BLE Device with current device name
+    BLEDevice::init(deviceName.c_str());
     
     // Create BLE Server
     pServer = BLEDevice::createServer();
@@ -198,6 +212,24 @@ bool BLEManager::init() {
     
     Serial.println("WiFi Password characteristic created");
     
+    // Create Device Name Characteristic
+    pDeviceNameCharacteristic = pService->createCharacteristic(
+        DEVICE_NAME_CHAR_UUID,
+        BLECharacteristic::PROPERTY_READ |
+        BLECharacteristic::PROPERTY_WRITE
+    );
+    
+    // Set Device Name characteristic callbacks
+    pDeviceNameCharacteristic->setCallbacks(new CharacteristicCallbacks(this, CharacteristicCallbacks::DEVICE_NAME));
+    
+    // Add descriptor for user-friendly name
+    BLEDescriptor *pDeviceNameDescriptor = new BLEDescriptor((uint16_t)0x2901);
+    pDeviceNameDescriptor->setValue("Device Name");
+    pDeviceNameCharacteristic->addDescriptor(pDeviceNameDescriptor);
+    pDeviceNameCharacteristic->setValue(deviceName.c_str());
+    
+    Serial.println("Device Name characteristic created");
+    
     // Start LoRABLE service
     pService->start();
     Serial.println("LoRABLE service started");
@@ -231,9 +263,24 @@ bool BLEManager::init() {
     pAdvertising->setScanResponse(true);
     pAdvertising->setMinPreferred(0x06);  // Functions for iPhone connection issues
     pAdvertising->setMinPreferred(0x12);
+    
+    // Add manufacturer data "Mastashake"
+    // Format: Company ID (2 bytes, little-endian) + Data
+    // Using 0xFFFF as custom company ID
+    String manufacturerData = "";
+    manufacturerData += (char)0xFF;  // Company ID low byte
+    manufacturerData += (char)0xFF;  // Company ID high byte
+    manufacturerData += "Mastashake"; // Custom data
+    BLEAdvertisementData advertisementData;
+    advertisementData.setManufacturerData(manufacturerData);
+    advertisementData.setCompleteServices(BLEUUID(SERVICE_UUID));
+    advertisementData.setName(deviceName.c_str());
+    pAdvertising->setAdvertisementData(advertisementData);
+    
     BLEDevice::startAdvertising();
     
     Serial.println("BLE initialized successfully");
+    Serial.println("Manufacturer data: Mastashake");
     Serial.println("Waiting for BLE client connection...");
     Serial.print("Service UUID: ");
     Serial.println(SERVICE_UUID);
@@ -253,6 +300,10 @@ void BLEManager::setMessageCallback(void (*callback)(const String&)) {
 
 void BLEManager::setWiFiCallback(void (*callback)(const String&, const String&)) {
     wifiCallback = callback;
+}
+
+void BLEManager::setDeviceNameCallback(void (*callback)(const String&)) {
+    deviceNameCallback = callback;
 }
 
 bool BLEManager::isConnected() {
@@ -340,4 +391,20 @@ uint8_t BLEManager::getBatteryLevel() {
         Serial.println("Battery pins not defined, returning 100%");
         return 100;
     #endif
+}
+
+String BLEManager::getDeviceName() {
+    return deviceName;
+}
+
+void BLEManager::setDeviceName(const String& name) {
+    deviceName = name;
+    if (pDeviceNameCharacteristic != nullptr) {
+        pDeviceNameCharacteristic->setValue(deviceName.c_str());
+        pDeviceNameCharacteristic->notify();
+    }
+    // Update the BLE device name
+    BLEDevice::init(deviceName.c_str());
+    Serial.print("Device name set to: ");
+    Serial.println(deviceName);
 }

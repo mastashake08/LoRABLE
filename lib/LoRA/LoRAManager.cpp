@@ -1,21 +1,22 @@
 #include "LoRAManager.h"
+// Note: Do not include heltec_unofficial.h here to avoid multiple definition errors
+// The radio object is declared as extern in LoRAManager.h and defined in main.cpp
 
 LoRAManager::LoRAManager() 
-    : radio(nullptr),
-      currentSyncWord(DEFAULT_SYNC_WORD),
+    : currentSyncWord(DEFAULT_SYNC_WORD),
       lastRSSI(0),
-      lastSNR(0.0) {
+      lastSNR(0.0),
+      radioInitialized(false) {
 }
 
 bool LoRAManager::init() {
     Serial.println("Initializing LoRA...");
     
-    // Create SX1262 instance with pin configuration
-    radio = new SX1262(new Module(RADIO_CS_PIN, RADIO_DIO1_PIN, RADIO_RST_PIN, RADIO_BUSY_PIN));
+    // Note: heltec_setup() must be called in main.cpp before this
+    // to initialize the SPI bus and radio hardware
     
-    // Initialize SX1262
-    SX1262* lora = (SX1262*)radio;
-    int state = lora->begin(LORA_FREQUENCY, LORA_BANDWIDTH, LORA_SPREADING_FACTOR, 
+    // Configure LoRA parameters using the global 'radio' object from heltec_unofficial.h
+    int state = radio.begin(LORA_FREQUENCY, LORA_BANDWIDTH, LORA_SPREADING_FACTOR, 
                             LORA_CODING_RATE, currentSyncWord, LORA_TX_POWER);
     
     if (state != RADIOLIB_ERR_NONE) {
@@ -25,10 +26,12 @@ bool LoRAManager::init() {
     }
     
     // Configure additional settings
-    lora->setCRC(true);
+    radio.setCRC(true);
     
     // Start listening for packets
-    lora->startReceive();
+    radio.startReceive();
+    
+    radioInitialized = true;
     
     Serial.println("LoRA initialized successfully");
     Serial.print("Frequency: ");
@@ -48,9 +51,8 @@ bool LoRAManager::init() {
 void LoRAManager::setSyncWord(uint8_t syncWord) {
     currentSyncWord = syncWord;
     
-    if (radio != nullptr) {
-        SX1262* lora = (SX1262*)radio;
-        lora->setSyncWord(currentSyncWord, 0x44);  // Private network, standard preamble
+    if (radioInitialized) {
+        radio.setSyncWord(currentSyncWord, 0x44);  // Private network, standard preamble
     }
     
     Serial.print("LoRA sync word updated to: 0x");
@@ -62,23 +64,22 @@ uint8_t LoRAManager::getSyncWord() {
 }
 
 bool LoRAManager::sendMessage(const String& message) {
-    if (message.length() == 0 || radio == nullptr) {
+    if (message.length() == 0 || !radioInitialized) {
+        Serial.println("Cannot send: LoRA not initialized or empty message");
         return false;
     }
     
     Serial.print("Sending LoRA message: ");
     Serial.println(message);
     
-    SX1262* lora = (SX1262*)radio;
-    
     // Transmit the message
-    int state = lora->transmit(message.c_str());
+    int state = radio.transmit(message.c_str());
     
     if (state == RADIOLIB_ERR_NONE) {
         Serial.println("Message sent successfully");
         
         // Restart listening for incoming messages
-        lora->startReceive();
+        radio.startReceive();
         
         return true;
     } else {
@@ -86,27 +87,26 @@ bool LoRAManager::sendMessage(const String& message) {
         Serial.println(state);
         
         // Try to restart listening anyway
-        lora->startReceive();
+        radio.startReceive();
         
         return false;
     }
 }
 
 String LoRAManager::receiveMessage() {
-    if (radio == nullptr) {
+    if (!radioInitialized) {
         return "";
     }
     
-    SX1262* lora = (SX1262*)radio;
     String message = "";
     
     // Check if packet is available (non-blocking)
-    int state = lora->readData(message);
+    int state = radio.readData(message);
     
     if (state == RADIOLIB_ERR_NONE) {
         // Packet received successfully
-        lastRSSI = lora->getRSSI();
-        lastSNR = lora->getSNR();
+        lastRSSI = radio.getRSSI();
+        lastSNR = radio.getSNR();
         
         Serial.print("Received LoRA message: ");
         Serial.println(message);
@@ -117,7 +117,7 @@ String LoRAManager::receiveMessage() {
         Serial.println(" dB");
         
         // Restart listening
-        lora->startReceive();
+        radio.startReceive();
         
         return message;
     } else if (state == RADIOLIB_ERR_RX_TIMEOUT) {
@@ -130,11 +130,10 @@ String LoRAManager::receiveMessage() {
 }
 
 void LoRAManager::setFrequency(long frequency) {
-    if (radio == nullptr) return;
+    if (!radioInitialized) return;
     
-    SX1262* lora = (SX1262*)radio;
     float freqMHz = frequency / 1E6;
-    lora->setFrequency(freqMHz);
+    radio.setFrequency(freqMHz);
     
     Serial.print("LoRA frequency set to: ");
     Serial.print(freqMHz);
@@ -142,26 +141,24 @@ void LoRAManager::setFrequency(long frequency) {
 }
 
 void LoRAManager::setSpreadingFactor(int sf) {
-    if (sf < 6 || sf > 12 || radio == nullptr) {
-        Serial.println("Invalid spreading factor (must be 6-12)");
+    if (sf < 6 || sf > 12 || !radioInitialized) {
+        Serial.println("Invalid spreading factor (must be 6-12) or radio not initialized");
         return;
     }
     
-    SX1262* lora = (SX1262*)radio;
-    lora->setSpreadingFactor(sf);
+    radio.setSpreadingFactor(sf);
     
     Serial.print("LoRA spreading factor set to: ");
     Serial.println(sf);
 }
 
 void LoRAManager::setTxPower(int power) {
-    if (power < 2 || power > 20 || radio == nullptr) {
-        Serial.println("Invalid TX power (must be 2-20 dBm)");
+    if (power < 2 || power > 20 || !radioInitialized) {
+        Serial.println("Invalid TX power (must be 2-20 dBm) or radio not initialized");
         return;
     }
     
-    SX1262* lora = (SX1262*)radio;
-    lora->setOutputPower(power);
+    radio.setOutputPower(power);
     
     Serial.print("LoRA TX power set to: ");
     Serial.print(power);

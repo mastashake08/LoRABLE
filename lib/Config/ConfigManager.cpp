@@ -138,6 +138,26 @@ void ConfigManager::clearWiFiCredentials() {
     Serial.println("WiFi credentials cleared from config");
 }
 
+void ConfigManager::saveDeviceName(const String& name) {
+    preferences.begin(PREFS_NAMESPACE, false);
+    preferences.putString(KEY_DEVICE_NAME, name);
+    preferences.end();
+    
+    Serial.print("Saved device name to config: ");
+    Serial.println(name);
+}
+
+String ConfigManager::loadDeviceName(const String& defaultValue) {
+    preferences.begin(PREFS_NAMESPACE, true);
+    String name = preferences.getString(KEY_DEVICE_NAME, defaultValue);
+    preferences.end();
+    
+    Serial.print("Loaded device name from config: ");
+    Serial.println(name);
+    
+    return name;
+}
+
 void ConfigManager::clearAll() {
     preferences.begin(PREFS_NAMESPACE, false);
     preferences.clear();
@@ -157,9 +177,12 @@ void ConfigManager::printSettings() {
     int power = preferences.getInt(KEY_TX_POWER, 20);
     String ssid = preferences.getString(KEY_WIFI_SSID, "");
     bool hasPassword = preferences.getString(KEY_WIFI_PASSWORD, "").length() > 0;
+    String deviceName = preferences.getString(KEY_DEVICE_NAME, "LoRABLE");
     
     preferences.end();
     
+    Serial.print("Device Name: ");
+    Serial.println(deviceName);
     Serial.print("Sync Word: 0x");
     Serial.println(syncWord, HEX);
     Serial.print("Frequency: ");

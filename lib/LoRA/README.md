@@ -36,14 +36,21 @@ RADIO_BUSY_PIN    13
 ### Important Note
 The Heltec V3 board uses the **SX1262** LoRA chip (not SX127x). This requires the **RadioLib** library instead of the older sandeepmistry/LoRa library. The API is similar but not identical.
 
+**CRITICAL**: You must call `heltec_setup()` in your `main.cpp` setup() function **before** calling `loraManager.init()`. The `heltec_setup()` function initializes the SPI bus and radio hardware that the LoRAManager depends on.
+
 ## Usage
 
 ```cpp
 #include "LoRAManager.h"
+#include <heltec_unofficial.h>
 
 LoRAManager loraManager;
 
 void setup() {
+    // Initialize Heltec hardware first (includes radio SPI setup)
+    heltec_setup();
+    
+    // Now initialize LoRA
     if (!loraManager.init()) {
         Serial.println("LoRA init failed!");
     }

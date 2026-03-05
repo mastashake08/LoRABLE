@@ -7,16 +7,13 @@
 #include <BLEUtils.h>
 #include <BLE2902.h>
 
-// Heltec V3 Battery pins
-#define VBAT_CTRL 37  // Battery voltage control pin (GPIO37)
-#define VBAT_ADC  1   // Battery ADC pin (GPIO1)
-
 // BLE Service and Characteristic UUIDs
 #define SERVICE_UUID           "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
 #define SYNCWORD_CHAR_UUID     "beb5483e-36e1-4688-b7f5-ea07361b26a8"
 #define MESSAGE_CHAR_UUID      "a3c87500-8ed3-4bdf-8a39-a01bebede295"
 #define WIFI_SSID_CHAR_UUID    "7c8a8e48-68c9-4e3f-a3e6-8f6e7b8c9d0a"
 #define WIFI_PASSWORD_CHAR_UUID "8d9b9f59-79da-4f40-b4f7-9f7e8c9d0e1b"
+#define DEVICE_NAME_CHAR_UUID  "9e0c0a1f-8a9c-4f50-b5d8-0f8f9e0d1f2a"
 
 // Battery Service (Standard Bluetooth SIG UUID)
 #define BATTERY_SERVICE_UUID   BLEUUID((uint16_t)0x180F)
@@ -57,6 +54,12 @@ public:
     void setWiFiCallback(void (*callback)(const String&, const String&));
     
     /**
+     * Set callback function to be called when device name is changed via BLE
+     * @param callback Function pointer that takes device name
+     */
+    void setDeviceNameCallback(void (*callback)(const String&));
+    
+    /**
      * Check if a BLE client is currently connected
      * @return true if connected, false otherwise
      */
@@ -85,6 +88,18 @@ public:
      * @return Battery level percentage (0-100)
      */
     uint8_t getBatteryLevel();
+    
+    /**
+     * Get current device name
+     * @return Current device name
+     */
+    String getDeviceName();
+    
+    /**
+     * Set device name (updates BLE characteristic and device name)
+     * @param name New device name
+     */
+    void setDeviceName(const String& name);
 
 private:
     BLEServer* pServer;
@@ -93,14 +108,17 @@ private:
     BLECharacteristic* pBatteryLevelCharacteristic;
     BLECharacteristic* pWiFiSSIDCharacteristic;
     BLECharacteristic* pWiFiPasswordCharacteristic;
+    BLECharacteristic* pDeviceNameCharacteristic;
     bool deviceConnected;
     uint8_t currentSyncWord;
     uint8_t batteryLevel;
     String wifiSSID;
     String wifiPassword;
+    String deviceName;
     void (*syncWordCallback)(uint8_t);
     void (*messageCallback)(const String&);
     void (*wifiCallback)(const String&, const String&);
+    void (*deviceNameCallback)(const String&);
     
     // Callback classes for BLE events
     class ServerCallbacks;
