@@ -46,12 +46,14 @@ String lastReceivedMessage = "";
 String lastSentMessage = "";
 unsigned long lastDisplayUpdate = 0;
 unsigned long lastBatteryUpdate = 0;
+unsigned long lastHeartbeat = 0;
 
 // Mode flags
 bool serialModeEnabled = false;
 bool sleepModeActive = false;
 const unsigned long DISPLAY_UPDATE_INTERVAL = 1000;  // Update display every 1 second
 const unsigned long BATTERY_UPDATE_INTERVAL = 30000; // Update battery every 30 seconds
+const unsigned long HEARTBEAT_INTERVAL = 10000;      // Print heartbeat every 10 seconds
 
 // Display helper functions
 void initDisplay() {
@@ -78,7 +80,15 @@ void showStartupScreen() {
     u8g2.setFont(u8g2_font_inb16_mr);  // Large font
     u8g2.drawStr(20, 15, "LoRABLE");
     u8g2.setFont(u8g2_font_6x10_tf);   // Small font
-    u8g2.drawStr(20, 45, "Initializing...");
+    
+    // Show serial status
+    if (Serial) {
+        u8g2.drawStr(10, 40, "Serial: Ready");
+    } else {
+        u8g2.drawStr(10, 40, "Serial: Waiting");
+    }
+    
+    u8g2.drawStr(10, 55, "Initializing...");
     u8g2.sendBuffer();
 }
 
@@ -547,13 +557,26 @@ void onGPIOControl(const String& command) {
 }
 
 void setup() {
-    // Initialize Serial
+    // Initialize Serial with longer timeout for USB CDC
     Serial.begin(115200);
-    delay(1000);
+    
+    // Wait for Serial connection (max 3 seconds)
+    // This is needed for ESP32-S3 USB CDC
+    unsigned long serialStart = millis();
+    while (!Serial && (millis() - serialStart < 3000)) {
+        delay(100);
+    }
+    delay(500);  // Extra delay for stability
     
     Serial.println("\n\n====================================");
     Serial.println("        LoRABLE Starting...        ");
     Serial.println("====================================");
+    Serial.print("Chip: ESP32-S3, Free Heap: ");
+    Serial.println(ESP.getFreeHeap());
+    Serial.print("Sketch size: ");
+    Serial.print(ESP.getSketchSize());
+    Serial.print(" / ");
+    Serial.println(ESP.getFreeSketchSpace());
     
     // Initialize Display
     Serial.println("Initializing display...");
@@ -723,6 +746,20 @@ void loop() {
             lastReceivedMessage
         );
         lastDisplayUpdate = millis();
+    }
+    
+    // Print heartbeat to confirm serial is working
+    if (millis() - lastHeartbeat > HEARTBEAT_INTERVAL) {
+        Serial.print("[HEARTBEAT] Uptime: ");
+        Serial.print(millis() / 1000);
+        Serial.print("s | Free Heap: ");
+        Serial.print(ESP.getFreeHeap());
+        Serial.print(" | BLE: ");
+        Serial.print(bleManager.isConnected() ? "Connected" : "Disconnected");
+        Serial.print(" | Battery: ");
+        Serial.print(bleManager.getBatteryLevel());
+        Serial.println("%");
+        lastHeartbeat = millis();
     }
     
     // Periodically update battery level
