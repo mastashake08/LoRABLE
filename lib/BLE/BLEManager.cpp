@@ -100,7 +100,9 @@ bool BLEManager::init() {
         BLECharacteristic::PROPERTY_WRITE |
         BLECharacteristic::PROPERTY_NOTIFY
     );
-    , false));
+    
+    // Set characteristic callbacks
+    pSyncWordCharacteristic->setCallbacks(new CharacteristicCallbacks(this, false));
     
     // Set initial value
     pSyncWordCharacteristic->setValue(&currentSyncWord, 1);
@@ -112,9 +114,7 @@ bool BLEManager::init() {
     );
     
     // Set message characteristic callbacks
-    pMessageCharacteristic->setCallbacks(new CharacteristicCallbacks(this, true)
-    // Set initial value
-    pSyncWordCharacteristic->setValue(&currentSyncWord, 1);
+    pMessageCharacteristic->setCallbacks(new CharacteristicCallbacks(this, true));
     
     // Start service
     pService->start();
@@ -124,11 +124,7 @@ bool BLEManager::init() {
     pAdvertising->addServiceUUID(SERVICE_UUID);
     pAdvertising->setScanResponse(true);
     pAdvertising->setMinPreferred(0x06);  // Functions for iPhone connection issues
- 
-
-void BLEManager::setMessageCallback(void (*callback)(const String&)) {
-    messageCallback = callback;
-}   pAdvertising->setMinPreferred(0x12);
+    pAdvertising->setMinPreferred(0x12);
     BLEDevice::startAdvertising();
     
     Serial.println("BLE initialized successfully");
@@ -139,6 +135,10 @@ void BLEManager::setMessageCallback(void (*callback)(const String&)) {
 
 void BLEManager::setSyncWordCallback(void (*callback)(uint8_t)) {
     syncWordCallback = callback;
+}
+
+void BLEManager::setMessageCallback(void (*callback)(const String&)) {
+    messageCallback = callback;
 }
 
 bool BLEManager::isConnected() {
