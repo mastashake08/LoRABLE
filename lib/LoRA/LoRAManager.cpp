@@ -15,12 +15,54 @@ bool LoRAManager::init() {
     // Note: heltec_setup() must be called in main.cpp before this
     // to initialize the SPI bus and radio hardware
     
-    // Configure LoRA parameters using the global 'radio' object from heltec_unofficial.h
-    int state = radio.begin(LORA_FREQUENCY, LORA_BANDWIDTH, LORA_SPREADING_FACTOR, 
-                            LORA_CODING_RATE, currentSyncWord, LORA_TX_POWER);
+    // Initialize radio first with simple begin()
+    int state = radio.begin();
     
     if (state != RADIOLIB_ERR_NONE) {
-        Serial.print("LoRA initialization failed, code: ");
+        Serial.print("LoRA radio.begin() failed, code: ");
+        Serial.println(state);
+        return false;
+    }
+    
+    // Now configure LoRA parameters
+    state = radio.setFrequency(LORA_FREQUENCY);
+    if (state != RADIOLIB_ERR_NONE) {
+        Serial.print("Failed to set frequency, code: ");
+        Serial.println(state);
+        return false;
+    }
+    
+    state = radio.setBandwidth(LORA_BANDWIDTH);
+    if (state != RADIOLIB_ERR_NONE) {
+        Serial.print("Failed to set bandwidth, code: ");
+        Serial.println(state);
+        return false;
+    }
+    
+    state = radio.setSpreadingFactor(LORA_SPREADING_FACTOR);
+    if (state != RADIOLIB_ERR_NONE) {
+        Serial.print("Failed to set spreading factor, code: ");
+        Serial.println(state);
+        return false;
+    }
+    
+    state = radio.setCodingRate(LORA_CODING_RATE);
+    if (state != RADIOLIB_ERR_NONE) {
+        Serial.print("Failed to set coding rate, code: ");
+        Serial.println(state);
+        return false;
+    }
+    
+    state = radio.setOutputPower(LORA_TX_POWER);
+    if (state != RADIOLIB_ERR_NONE) {
+        Serial.print("Failed to set TX power, code: ");
+        Serial.println(state);
+        return false;
+    }
+    
+    state = radio.setSyncWord(currentSyncWord);
+    if (state != RADIOLIB_ERR_NONE) {
+        Serial.print("Failed to set sync word, code: ");
         Serial.println(state);
         return false;
     }
@@ -28,7 +70,7 @@ bool LoRAManager::init() {
     // Configure additional settings
     radio.setCRC(true);
     
-    // Set preamble length (default is usually 8, but let's be explicit)
+    // Set preamble length
     state = radio.setPreambleLength(8);
     if (state != RADIOLIB_ERR_NONE) {
         Serial.print("Failed to set preamble length, code: ");
@@ -36,7 +78,6 @@ bool LoRAManager::init() {
     }
     
     // Set current limit for PA (Power Amplifier) - important for SX1262
-    // SX1262 typically needs 140mA for +22dBm output
     state = radio.setCurrentLimit(140.0);
     if (state != RADIOLIB_ERR_NONE) {
         Serial.print("Failed to set current limit, code: ");
@@ -74,7 +115,11 @@ void LoRAManager::setSyncWord(uint8_t syncWord) {
     currentSyncWord = syncWord;
     
     if (radioInitialized) {
-        radio.setSyncWord(currentSyncWord, 0x44);  // Private network, standard preamble
+        int state = radio.setSyncWord(currentSyncWord);
+        if (state != RADIOLIB_ERR_NONE) {
+            Serial.print("Failed to set sync word, code: ");
+            Serial.println(state);
+        }
     }
     
     Serial.print("LoRA sync word updated to: 0x");
