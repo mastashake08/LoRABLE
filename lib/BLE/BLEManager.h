@@ -7,9 +7,9 @@
 #include <BLEUtils.h>
 #include <BLE2902.h>
 
-// Heltec V3 Battery pins (from heltec_unofficial.h)
-#define VBAT_CTRL GPIO_NUM_37  // Battery voltage control pin
-#define VBAT_ADC  GPIO_NUM_1   // Battery ADC pin
+// Heltec V3 Battery pins
+#define VBAT_CTRL 37  // Battery voltage control pin (GPIO37)
+#define VBAT_ADC  1   // Battery ADC pin (GPIO1)
 
 // BLE Service and Characteristic UUIDs
 #define SERVICE_UUID           "4fafc201-1fb5-459e-8fcc-c5c9c331914b"

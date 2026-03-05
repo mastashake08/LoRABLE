@@ -286,35 +286,58 @@ void BLEManager::updateBatteryLevel(uint8_t level) {
 }
 
 uint8_t BLEManager::getBatteryLevel() {
-    // Use Heltec library's battery functions for accurate reading
-    // Requires heltec_unofficial.h to be included in main.cpp
-    // Heltec V3: VBAT_CTRL (GPIO37) enables reading, VBAT_ADC (GPIO1) reads voltage
-    // Through voltage divider: R1=390K, R2=100K
+    // Heltec V3 battery reading
+    // VBAT_CTRL (GPIO37) enables battery voltage measurement
+    // VBAT_ADC (GPIO1) reads the battery voltage through voltage divider
     
     #ifdef VBAT_ADC
-        // Control pin to enable battery voltage reading
+        // Enable battery voltage reading
         pinMode(VBAT_CTRL, OUTPUT);
-        digitalWrite(VBAT_CTRL, LOW);
-        delay(5);
+        digitalWrite(VBAT_CTRL, LOW);  // LOW enables battery reading
+        delay(10);  // Wait for voltage to stabilize
         
-        // Read ADC value and convert to voltage
-        // Formula from Heltec library: ADC / 238.7 gives voltage
-        float vbat = analogRead(VBAT_ADC) / 238.7;
+        // Configure ADC with proper attenuation for 0-3.3V range
+        analogSetAttenuation(ADC_11db);  // Full 0-3.6V range
         
-        // Reset control pin
+        // Take multiple readings for stability
+        int total = 0;
+        const int numReadings = 10;
+        for (int i = 0; i < numReadings; i++) {
+            total += analogRead(VBAT_ADC);
+            delay(1);
+        }
+        int adcValue = total / numReadings;
+        
+        // Disable battery reading to save power
         pinMode(VBAT_CTRL, INPUT);
         
+        // Convert ADC to voltage
+        // ADC is 12-bit (0-4095), voltage divider ratio is 390k/(390k+100k) = 0.796
+        // Vbat = (ADC / 4095) * 3.3V * (490k/100k) = ADC * 0.00394
+        float vbat = adcValue * 0.00394;
+        
+        Serial.print("Battery ADC: ");
+        Serial.print(adcValue);
+        Serial.print(", Voltage: ");
+        Serial.print(vbat, 2);
+        Serial.print("V");
+        
         // Convert voltage to percentage
-        // LiPo: 3.0V = 0%, 4.2V = 100%
+        // LiPo voltage range: 3.0V (empty) to 4.2V (full)
         float percentage = ((vbat - 3.0) / (4.2 - 3.0)) * 100.0;
         
         // Clamp to 0-100
         if (percentage < 0) percentage = 0;
         if (percentage > 100) percentage = 100;
         
+        Serial.print(", Percentage: ");
+        Serial.print((uint8_t)percentage);
+        Serial.println("%");
+        
         return (uint8_t)percentage;
     #else
         // If no battery pin defined, return 100%
+        Serial.println("Battery pins not defined, returning 100%");
         return 100;
     #endif
 }
