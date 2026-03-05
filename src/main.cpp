@@ -12,22 +12,84 @@
  */
 
 #include <Arduino.h>
+#define HELTEC_POWER_BUTTON   // Required for proper display initialization
 #include <heltec_unofficial.h>
 #include "BLEManager.h"
 #include "LoRAManager.h"
-#include "DisplayManager.h"
 #include "ConfigManager.h"
 
 // Module instances
 BLEManager bleManager;
 LoRAManager loraManager;
-DisplayManager displayManager;
 ConfigManager configManager;
 
 // Application state
 String lastReceivedMessage = "";
 unsigned long lastDisplayUpdate = 0;
 const unsigned long DISPLAY_UPDATE_INTERVAL = 1000;  // Update display every 1 second
+
+// Display helper functions
+void showStartupScreen() {
+    display.clear();
+    display.setFont(ArialMT_Plain_24);
+    display.setTextAlignment(TEXT_ALIGN_CENTER);
+    display.drawString(64, 15, "LoRABLE");
+    display.setFont(ArialMT_Plain_10);
+    display.drawString(64, 45, "Initializing...");
+    display.display();
+}
+
+void showStatus(const String& message) {
+    display.clear();
+    display.setFont(ArialMT_Plain_16);
+    display.setTextAlignment(TEXT_ALIGN_CENTER);
+    display.drawString(64, 24, message);
+    display.display();
+}
+
+void showMessage(const String& message, int rssi, float snr) {
+    display.clear();
+    display.setFont(ArialMT_Plain_10);
+    display.setTextAlignment(TEXT_ALIGN_LEFT);
+    display.drawString(0, 0, "Received:");
+    
+    // Display message (word wrap if needed)
+    display.setFont(ArialMT_Plain_16);
+    display.drawString(0, 15, message);
+    
+    // Show signal quality
+    display.setFont(ArialMT_Plain_10);
+    display.drawString(0, 38, "RSSI: " + String(rssi) + " dBm");
+    display.drawString(0, 50, "SNR: " + String(snr, 1) + " dB");
+    
+    display.display();
+}
+
+void updateStatusDisplay(bool bleConnected, uint8_t syncWord, const String& lastMsg) {
+    display.clear();
+    display.setFont(ArialMT_Plain_10);
+    display.setTextAlignment(TEXT_ALIGN_LEFT);
+    
+    // BLE status
+    display.drawString(0, 0, "BLE: " + String(bleConnected ? "Connected" : "Waiting..."));
+    
+    // SyncWord
+    display.drawString(0, 12, "SyncWord: 0x" + String(syncWord, HEX));
+    
+    // Last message preview
+    display.drawString(0, 24, "Last msg:");
+    if (lastMsg.length() > 0) {
+        String preview = lastMsg.substring(0, min(16, (int)lastMsg.length()));
+        display.drawString(0, 36, preview);
+    } else {
+        display.drawString(0, 36, "(none)");
+    }
+    
+    // Listening indicator
+    display.drawString(0, 54, "Listening for LoRA...");
+    
+    display.display();
+}
 
 /**
  * Callback function called when syncWord is changed via BLE
@@ -45,30 +107,24 @@ void onSyncWordChanged(uint8_t newSyncWord) {
     configManager.saveSyncWord(newSyncWord);
     
     // Update display
-    displayManager.showStatus("SyncWord Updated!");
+    showStatus("SyncWord Updated!");
     delay(1500);
-    displayManager.updateStatus(bleManager.isConnected(), newSyncWord, lastReceivedMessage);
+    updateStatusDisplay(bleManager.isConnected(), newSyncWord, lastReceivedMessage);
 }
 
 void setup() {
-    // Initialize Serial for debugging
-    Serial.begin(115200);
-    delay(1000);  // Wait for serial to initialize
+    // Initialize Heltec hardware first (Serial at 115200, display, button)
+    heltec_setup();
+    
+    delay(500);  // Brief delay for hardware stabilization
     
     Serial.println("\n\n");
     Serial.println("====================================");
     Serial.println("        LoRABLE Starting...        ");
     Serial.println("====================================");
     
-    // Initialize Heltec hardware (display, LoRA radio, etc.)
-    heltec_setup();
-    Serial.println("Heltec hardware initialized");
-    
-    // Initialize Display (already initialized by heltec_setup, just configure it)
-    if (!displayManager.init()) {
-        Serial.println("ERROR: Display initialization failed!");
-    }
-    displayManager.showStartupScreen();
+    // Show startup screen
+    showStartupScreen();
     delay(2000);
     
     // Initialize Config Manager
@@ -82,8 +138,9 @@ void setup() {
     // Initialize LoRA
     if (!loraManager.init()) {
         Serial.println("ERROR: LoRA initialization failed!");
-        displayManager.showStatus("LoRA Failed!");
+        showStatus("LoRA Failed!");
         while(1) {
+            heltec_loop();
             delay(1000);  // Halt if LoRA fails
         }
     }
@@ -94,7 +151,7 @@ void setup() {
     // Initialize BLE
     if (!bleManager.init()) {
         Serial.println("ERROR: BLE initialization failed!");
-        displayManager.showStatus("BLE Failed!");
+        showStatus("BLE Failed!");
     }
     
     // Set BLE callback
@@ -107,7 +164,7 @@ void setup() {
     configManager.printSettings();
     
     // Show ready screen
-    displayManager.updateStatus(bleManager.isConnected(), savedSyncWord, "");
+    updateStatusDisplay(bleManager.isConnected(), savedSyncWord, "");
     
     Serial.println("====================================");
     Serial.println("     LoRABLE Ready!                ");
@@ -118,6 +175,9 @@ void setup() {
 }
 
 void loop() {
+    // Call heltec_loop() for display/button management
+    heltec_loop();
+    
     // Check for incoming LoRA messages
     String message = loraManager.receiveMessage();
     
@@ -130,13 +190,13 @@ void loop() {
         float snr = loraManager.getSNR();
         
         // Display message with signal info
-        displayManager.showMessage(message, rssi, snr);
+        showMessage(message, rssi, snr);
         
         // Keep message on screen for 5 seconds
         delay(5000);
         
         // Return to status display
-        displayManager.updateStatus(
+        updateStatusDisplay(
             bleManager.isConnected(), 
             loraManager.getSyncWord(), 
             lastReceivedMessage
@@ -145,16 +205,13 @@ void loop() {
     
     // Periodically update status display (to show BLE connection changes)
     if (millis() - lastDisplayUpdate > DISPLAY_UPDATE_INTERVAL) {
-        displayManager.updateStatus(
+        updateStatusDisplay(
             bleManager.isConnected(), 
             loraManager.getSyncWord(), 
             lastReceivedMessage
         );
         lastDisplayUpdate = millis();
     }
-    
-    // Call heltec_loop for display and button handling
-    heltec_loop();
     
     // Small delay to prevent CPU hogging
     delay(10);
