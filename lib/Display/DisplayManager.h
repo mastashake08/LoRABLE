@@ -2,17 +2,7 @@
 #define DISPLAY_MANAGER_H
 
 #include <Arduino.h>
-#include <Wire.h>
-#include "SSD1306Wire.h"
-#include "OLEDDisplayFonts.h"
-
-// OLED Pins for Heltec WiFi LoRA 32 V3
-#define OLED_SDA     17
-#define OLED_SCL     18
-#define OLED_RST     21
-
-// Power Control
-#define VEXT_CTRL    36  // OLED power control (active LOW)
+#include <heltec_unofficial.h>
 
 // Display dimensions
 #define SCREEN_WIDTH  128
@@ -79,13 +69,7 @@ public:
     void updateStatus(bool bleConnected, uint8_t syncWord, const String& lastMessage = "");
 
 private:
-    SSD1306Wire* display;
     unsigned long lastUpdate;
-    
-    /**
-     * Enable OLED power (set VEXT_CTRL LOW)
-     */
-    void enablePower();
 };
 
 #endif // DISPLAY_MANAGER_H
