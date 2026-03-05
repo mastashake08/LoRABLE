@@ -12,7 +12,7 @@ extern SX1262 radio;
 #define LORA_BANDWIDTH      125.0   // 125 kHz
 #define LORA_SPREADING_FACTOR  7    // SF7 (6-12)
 #define LORA_CODING_RATE    5       // 4/5 (5-8 for 4/5-4/8)
-#define LORA_TX_POWER       20      // 20 dBm
+#define LORA_TX_POWER       17      // 17 dBm (safe default for SX1262)
 #define DEFAULT_SYNC_WORD   0x12    // Default sync word
 
 /**

@@ -28,8 +28,27 @@ bool LoRAManager::init() {
     // Configure additional settings
     radio.setCRC(true);
     
+    // Set preamble length (default is usually 8, but let's be explicit)
+    state = radio.setPreambleLength(8);
+    if (state != RADIOLIB_ERR_NONE) {
+        Serial.print("Failed to set preamble length, code: ");
+        Serial.println(state);
+    }
+    
+    // Set current limit for PA (Power Amplifier) - important for SX1262
+    // SX1262 typically needs 140mA for +22dBm output
+    state = radio.setCurrentLimit(140.0);
+    if (state != RADIOLIB_ERR_NONE) {
+        Serial.print("Failed to set current limit, code: ");
+        Serial.println(state);
+    }
+    
     // Start listening for packets
-    radio.startReceive();
+    state = radio.startReceive();
+    if (state != RADIOLIB_ERR_NONE) {
+        Serial.print("Failed to start receive mode, code: ");
+        Serial.println(state);
+    }
     
     radioInitialized = true;
     
@@ -42,6 +61,9 @@ bool LoRAManager::init() {
     Serial.print("Bandwidth: ");
     Serial.print(LORA_BANDWIDTH);
     Serial.println(" kHz");
+    Serial.print("TX Power: ");
+    Serial.print(LORA_TX_POWER);
+    Serial.println(" dBm");
     Serial.print("Sync Word: 0x");
     Serial.println(currentSyncWord, HEX);
     
@@ -69,22 +91,69 @@ bool LoRAManager::sendMessage(const String& message) {
         return false;
     }
     
-    Serial.print("Sending LoRA message: ");
+    // Check message length (SX1262 max payload is 255 bytes)
+    if (message.length() > 255) {
+        Serial.println("Message too long! Max 255 bytes");
+        return false;
+    }
+    
+    Serial.print("Sending LoRA message (");
+    Serial.print(message.length());
+    Serial.print(" bytes): ");
     Serial.println(message);
     
+    // Stop receiving before transmitting
+    int state = radio.standby();
+    if (state != RADIOLIB_ERR_NONE) {
+        Serial.print("Failed to enter standby mode, code: ");
+        Serial.println(state);
+    }
+    delay(10);  // Small delay to ensure radio is ready
+    
     // Transmit the message
-    int state = radio.transmit(message.c_str());
+    state = radio.transmit(message.c_str());
     
     if (state == RADIOLIB_ERR_NONE) {
-        Serial.println("Message sent successfully");
+        Serial.println("✓ Message sent successfully");
         
         // Restart listening for incoming messages
         radio.startReceive();
         
         return true;
     } else {
-        Serial.print("Message send failed, code: ");
+        Serial.print("✗ Message send failed, code: ");
         Serial.println(state);
+        Serial.print("Error details: ");
+        
+        // Decode common error codes
+        switch(state) {
+            case RADIOLIB_ERR_PACKET_TOO_LONG:
+                Serial.println("Packet too long");
+                break;
+            case RADIOLIB_ERR_TX_TIMEOUT:
+                Serial.println("TX timeout - check antenna and frequency");
+                break;
+            case RADIOLIB_ERR_CHIP_NOT_FOUND:
+                Serial.println("Chip not found - hardware issue");
+                break;
+            case RADIOLIB_ERR_CRC_MISMATCH:
+                Serial.println("CRC mismatch");
+                break;
+            case RADIOLIB_ERR_INVALID_BANDWIDTH:
+                Serial.println("Invalid bandwidth");
+                break;
+            case RADIOLIB_ERR_INVALID_SPREADING_FACTOR:
+                Serial.println("Invalid spreading factor");
+                break;
+            case RADIOLIB_ERR_INVALID_CODING_RATE:
+                Serial.println("Invalid coding rate");
+                break;
+            default:
+                Serial.print("Unknown error (");
+                Serial.print(state);
+                Serial.println(")");
+                break;
+        }
         
         // Try to restart listening anyway
         radio.startReceive();
