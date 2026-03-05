@@ -6,7 +6,8 @@ SerialCommand::SerialCommand()
       syncWordCallback(nullptr),
       messageCallback(nullptr),
       wifiCallback(nullptr),
-      statusCallback(nullptr) {
+      statusCallback(nullptr),
+      gpioCallback(nullptr) {
 }
 
 void SerialCommand::init() {
@@ -120,6 +121,26 @@ void SerialCommand::processCommand(const String& command) {
         Serial.println("WiFi password received");
         Serial.println("Note: Use WIFI_SSID command first to set credentials");
     }
+    // GPIO command: GPIO:pin,state
+    else if (command.startsWith("GPIO:") || command.startsWith("gpio:")) {
+        String gpioCmd = command.substring(5);
+        gpioCmd.trim();
+        
+        if (gpioCmd.length() == 0) {
+            Serial.println("ERROR: Empty GPIO command");
+            Serial.println("Format: GPIO:pin,state (e.g., GPIO:5,1)");
+            return;
+        }
+        
+        Serial.print("GPIO control: ");
+        Serial.println(gpioCmd);
+        
+        if (gpioCallback != nullptr) {
+            gpioCallback(gpioCmd);
+        } else {
+            Serial.println("ERROR: GPIO callback not set");
+        }
+    }
     // Unknown command
     else {
         Serial.print("ERROR: Unknown command: ");
@@ -137,11 +158,14 @@ void SerialCommand::printHelp() {
     Serial.println("  MESSAGE:text                 - Send message via LoRA");
     Serial.println("  WIFI_SSID:your_ssid          - Set WiFi SSID");
     Serial.println("  WIFI_PASSWORD:your_password  - Set WiFi password");
+    Serial.println("  GPIO:pin,state               - Control GPIO (e.g., GPIO:5,1)");
     Serial.println("\nExamples:");
     Serial.println("  SYNCWORD:0x12");
     Serial.println("  MESSAGE:Hello from serial!");
     Serial.println("  WIFI_SSID:MyNetwork");
     Serial.println("  WIFI_PASSWORD:MyPassword123");
+    Serial.println("  GPIO:5,1     (GPIO 5 HIGH)");
+    Serial.println("  GPIO:13,0    (GPIO 13 LOW)");
     Serial.println("\nNote: WiFi is only used for OTA updates on boot");
     Serial.println("==============================\n");
 }
@@ -175,6 +199,10 @@ void SerialCommand::setWiFiCallback(void (*callback)(const String&, const String
 
 void SerialCommand::setStatusCallback(void (*callback)()) {
     statusCallback = callback;
+}
+
+void SerialCommand::setGPIOCallback(void (*callback)(const String&)) {
+    gpioCallback = callback;
 }
 
 void SerialCommand::setEnabled(bool _enabled) {

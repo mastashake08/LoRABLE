@@ -14,6 +14,7 @@
 #define WIFI_SSID_CHAR_UUID    "7c8a8e48-68c9-4e3f-a3e6-8f6e7b8c9d0a"
 #define WIFI_PASSWORD_CHAR_UUID "8d9b9f59-79da-4f40-b4f7-9f7e8c9d0e1b"
 #define DEVICE_NAME_CHAR_UUID  "9e0c0a1f-8a9c-4f50-b5d8-0f8f9e0d1f2a"
+#define GPIO_CONTROL_CHAR_UUID "a1b2c3d4-e5f6-7890-1234-567890abcdef"
 
 // Battery Service (Standard Bluetooth SIG UUID)
 #define BATTERY_SERVICE_UUID   BLEUUID((uint16_t)0x180F)
@@ -58,6 +59,13 @@ public:
      * @param callback Function pointer that takes device name
      */
     void setDeviceNameCallback(void (*callback)(const String&));
+    
+    /**
+     * Set callback function to be called when GPIO control command is received via BLE
+     * Format: "pin,state" e.g. "5,1" for GPIO 5 HIGH, "13,0" for GPIO 13 LOW
+     * @param callback Function pointer that takes GPIO command string
+     */
+    void setGPIOCallback(void (*callback)(const String&));
     
     /**
      * Check if a BLE client is currently connected
@@ -109,6 +117,7 @@ private:
     BLECharacteristic* pWiFiSSIDCharacteristic;
     BLECharacteristic* pWiFiPasswordCharacteristic;
     BLECharacteristic* pDeviceNameCharacteristic;
+    BLECharacteristic* pGPIOControlCharacteristic;
     bool deviceConnected;
     uint8_t currentSyncWord;
     uint8_t batteryLevel;
@@ -119,6 +128,7 @@ private:
     void (*messageCallback)(const String&);
     void (*wifiCallback)(const String&, const String&);
     void (*deviceNameCallback)(const String&);
+    void (*gpioCallback)(const String&);
     
     // Callback classes for BLE events
     class ServerCallbacks;

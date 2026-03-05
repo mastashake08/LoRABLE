@@ -26,7 +26,7 @@ public:
 // Characteristic callbacks for read/write events
 class BLEManager::CharacteristicCallbacks: public BLECharacteristicCallbacks {
 public:
-    enum CharType { SYNCWORD, MESSAGE, WIFI_SSID, WIFI_PASSWORD, DEVICE_NAME };
+    enum CharType { SYNCWORD, MESSAGE, WIFI_SSID, WIFI_PASSWORD, DEVICE_NAME, GPIO_CONTROL };
     
     CharacteristicCallbacks(BLEManager* mgr, CharType type) 
         : manager(mgr), charType(type) {}
@@ -89,6 +89,14 @@ private:
                         manager->deviceNameCallback(value);
                     }
                     break;
+                    
+                case GPIO_CONTROL:
+                    Serial.print("Received GPIO control via BLE: ");
+                    Serial.println(value);
+                    if (manager->gpioCallback != nullptr) {
+                        manager->gpioCallback(value);
+                    }
+                    break;
             }
         }
     }
@@ -109,6 +117,7 @@ BLEManager::BLEManager()
       pWiFiSSIDCharacteristic(nullptr),
       pWiFiPasswordCharacteristic(nullptr),
       pDeviceNameCharacteristic(nullptr),
+      pGPIOControlCharacteristic(nullptr),
       deviceConnected(false),
       currentSyncWord(0x12),  // Default syncWord
       batteryLevel(100),     // Default battery level
@@ -118,7 +127,8 @@ BLEManager::BLEManager()
       syncWordCallback(nullptr),
       messageCallback(nullptr),
       wifiCallback(nullptr),
-      deviceNameCallback(nullptr) {
+      deviceNameCallback(nullptr),
+      gpioCallback(nullptr) {
 }
 
 bool BLEManager::init() {
@@ -230,6 +240,24 @@ bool BLEManager::init() {
     
     Serial.println("Device Name characteristic created");
     
+    // Create GPIO Control Characteristic
+    pGPIOControlCharacteristic = pService->createCharacteristic(
+        GPIO_CONTROL_CHAR_UUID,
+        BLECharacteristic::PROPERTY_READ |
+        BLECharacteristic::PROPERTY_WRITE
+    );
+    
+    // Set GPIO Control characteristic callbacks
+    pGPIOControlCharacteristic->setCallbacks(new CharacteristicCallbacks(this, CharacteristicCallbacks::GPIO_CONTROL));
+    
+    // Add descriptor for user-friendly name
+    BLEDescriptor *pGPIODescriptor = new BLEDescriptor((uint16_t)0x2901);
+    pGPIODescriptor->setValue("GPIO Control");
+    pGPIOControlCharacteristic->addDescriptor(pGPIODescriptor);
+    pGPIOControlCharacteristic->setValue("0,0");  // Default: GPIO 0, state 0
+    
+    Serial.println("GPIO Control characteristic created");
+    
     // Start LoRABLE service
     pService->start();
     Serial.println("LoRABLE service started");
@@ -304,6 +332,10 @@ void BLEManager::setWiFiCallback(void (*callback)(const String&, const String&))
 
 void BLEManager::setDeviceNameCallback(void (*callback)(const String&)) {
     deviceNameCallback = callback;
+}
+
+void BLEManager::setGPIOCallback(void (*callback)(const String&)) {
+    gpioCallback = callback;
 }
 
 bool BLEManager::isConnected() {

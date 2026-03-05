@@ -11,6 +11,7 @@
  * - MESSAGE:text - Send LoRA message
  * - WIFI_SSID:ssid - Set WiFi SSID
  * - WIFI_PASSWORD:password - Set WiFi password
+ * - GPIO:pin,state - Control GPIO (e.g., GPIO:5,1 for pin 5 HIGH)
  * - STATUS - Show current status
  */
 class SerialCommand {
@@ -53,6 +54,13 @@ public:
     void setStatusCallback(void (*callback)());
     
     /**
+     * Set callback for GPIO control command
+     * Format: "pin,state" e.g. "5,1" for GPIO 5 HIGH
+     * @param callback Function that takes String command
+     */
+    void setGPIOCallback(void (*callback)(const String&));
+    
+    /**
      * Enable or disable serial command processing
      * @param enabled true to enable, false to disable
      */
@@ -73,6 +81,7 @@ private:
     void (*messageCallback)(const String&);
     void (*wifiCallback)(const String&, const String&);
     void (*statusCallback)();
+    void (*gpioCallback)(const String&);
     
     // Command parsing
     void processCommand(const String& command);

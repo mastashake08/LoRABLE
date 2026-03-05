@@ -442,6 +442,71 @@ void onDeviceNameChanged(const String& newName) {
     Serial.println("Device name will be applied on next reboot");
 }
 
+/**
+ * Callback function called when GPIO control command is received
+ * Format: "pin,state" (e.g., "5,1" for GPIO 5 HIGH, "13,0" for GPIO 13 LOW)
+ */
+void onGPIOControl(const String& command) {
+    Serial.println("=== GPIO Control ===");
+    Serial.print("Command: ");
+    Serial.println(command);
+    
+    // Parse command: "pin,state"
+    int commaIndex = command.indexOf(',');
+    if (commaIndex == -1) {
+        Serial.println("ERROR: Invalid GPIO format. Use: pin,state");
+        showStatus("GPIO Error!");
+        delay(1500);
+        updateStatusDisplay(bleManager.isConnected(), loraManager.getSyncWord(), lastReceivedMessage);
+        return;
+    }
+    
+    String pinStr = command.substring(0, commaIndex);
+    String stateStr = command.substring(commaIndex + 1);
+    pinStr.trim();
+    stateStr.trim();
+    
+    int pin = pinStr.toInt();
+    int state = stateStr.toInt();
+    
+    // Validate pin number (ESP32 valid GPIO pins)
+    if (pin < 0 || pin > 48) {
+        Serial.print("ERROR: Invalid GPIO pin: ");
+        Serial.println(pin);
+        showStatus("Invalid Pin!");
+        delay(1500);
+        updateStatusDisplay(bleManager.isConnected(), loraManager.getSyncWord(), lastReceivedMessage);
+        return;
+    }
+    
+    // Validate state
+    if (state != 0 && state != 1) {
+        Serial.print("ERROR: Invalid state (must be 0 or 1): ");
+        Serial.println(state);
+        showStatus("Invalid State!");
+        delay(1500);
+        updateStatusDisplay(bleManager.isConnected(), loraManager.getSyncWord(), lastReceivedMessage);
+        return;
+    }
+    
+    // Configure and set GPIO
+    pinMode(pin, OUTPUT);
+    digitalWrite(pin, state);
+    
+    Serial.print("GPIO ");
+    Serial.print(pin);
+    Serial.print(" set to ");
+    Serial.println(state ? "HIGH" : "LOW");
+    
+    // Update display
+    String displayMsg = "GPIO " + String(pin) + " " + String(state ? "ON" : "OFF");
+    showStatus(displayMsg);
+    delay(2000);
+    
+    // Return to normal display
+    updateStatusDisplay(bleManager.isConnected(), loraManager.getSyncWord(), lastReceivedMessage);
+}
+
 void setup() {
     // Initialize Serial
     Serial.begin(115200);
@@ -481,6 +546,7 @@ void setup() {
     serialCommand.setMessageCallback(onMessageReceived);
     serialCommand.setWiFiCallback(onWiFiCredentialsChanged);
     serialCommand.setStatusCallback(onStatusRequest);
+    serialCommand.setGPIOCallback(onGPIOControl);
     serialCommand.setEnabled(false);  // Disabled by default
     Serial.println("Serial command handler initialized (disabled)");
     
@@ -551,6 +617,7 @@ void setup() {
     bleManager.setMessageCallback(onMessageReceived);
     bleManager.setDeviceNameCallback(onDeviceNameChanged);
     bleManager.setWiFiCallback(onWiFiCredentialsChanged);
+    bleManager.setGPIOCallback(onGPIOControl);
     // Set initial syncWord in BLE characteristic
     bleManager.setSyncWord(savedSyncWord);
     
