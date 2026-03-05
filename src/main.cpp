@@ -458,21 +458,44 @@ void onDeviceNameChanged(const String& newName) {
  */
 void onGPIOControl(const String& command) {
     Serial.println("=== GPIO Control ===");
-    Serial.print("Command: ");
-    Serial.println(command);
+    Serial.print("Command received: '");
+    Serial.print(command);
+    Serial.print("' Length: ");
+    Serial.println(command.length());
+    
+    // Print hex dump of command for debugging
+    Serial.print("Hex: ");
+    for (int i = 0; i < command.length(); i++) {
+        Serial.print("0x");
+        Serial.print((byte)command[i], HEX);
+        Serial.print(" ");
+    }
+    Serial.println();
+    
+    // Clean the command - remove any whitespace, newlines, etc.
+    String cleanCmd = command;
+    cleanCmd.trim();
+    cleanCmd.replace("\r", "");
+    cleanCmd.replace("\n", "");
+    cleanCmd.replace(" ", "");
+    
+    Serial.print("Cleaned command: '");
+    Serial.print(cleanCmd);
+    Serial.println("'");
     
     // Parse command: "pin,state"
-    int commaIndex = command.indexOf(',');
+    int commaIndex = cleanCmd.indexOf(',');
     if (commaIndex == -1) {
-        Serial.println("ERROR: Invalid GPIO format. Use: pin,state");
-        showStatus("GPIO Error!");
-        delay(1500);
+        Serial.println("ERROR: Invalid GPIO format. No comma found!");
+        Serial.println("Expected format: pin,state (e.g., '2,1')");
+        showStatus("GPIO: No comma!");
+        delay(2000);
         updateStatusDisplay(bleManager.isConnected(), loraManager.getSyncWord(), lastReceivedMessage);
         return;
     }
     
-    String pinStr = command.substring(0, commaIndex);
-    String stateStr = command.substring(commaIndex + 1);
+    String pinStr = cleanCmd.substring(0, commaIndex);
+    String stateStr = cleanCmd.substring(commaIndex + 1);
     pinStr.trim();
     stateStr.trim();
     
@@ -481,6 +504,36 @@ void onGPIOControl(const String& command) {
     Serial.print("' state: '");
     Serial.print(stateStr);
     Serial.println("'");
+    
+    // Validate that we have numeric values
+    bool pinValid = true;
+    bool stateValid = true;
+    
+    for (int i = 0; i < pinStr.length(); i++) {
+        if (!isDigit(pinStr[i])) {
+            pinValid = false;
+            break;
+        }
+    }
+    
+    for (int i = 0; i < stateStr.length(); i++) {
+        if (!isDigit(stateStr[i])) {
+            stateValid = false;
+            break;
+        }
+    }
+    
+    if (!pinValid || !stateValid || pinStr.length() == 0 || stateStr.length() == 0) {
+        Serial.println("ERROR: Pin or state is not a valid number!");
+        Serial.print("Pin valid: ");
+        Serial.print(pinValid ? "yes" : "no");
+        Serial.print(" State valid: ");
+        Serial.println(stateValid ? "yes" : "no");
+        showStatus("GPIO: Bad format!");
+        delay(2000);
+        updateStatusDisplay(bleManager.isConnected(), loraManager.getSyncWord(), lastReceivedMessage);
+        return;
+    }
     
     int pin = pinStr.toInt();
     int state = stateStr.toInt();
@@ -505,8 +558,10 @@ void onGPIOControl(const String& command) {
         Serial.print("ERROR: Invalid/Reserved GPIO pin: ");
         Serial.println(pin);
         Serial.println("Reserved: 8-14 (LoRA), 17-21 (OLED/USB), 26-32 (Flash), 36 (VEXT)");
-        showStatus("Pin Reserved!");
-        delay(1500);
+        Serial.println("Safe pins: 1-7, 15-16, 22-25, 33-35, 37-44, 47-48");
+        String errorMsg = "Pin " + String(pin) + " reserved!";
+        showStatus(errorMsg);
+        delay(2500);
         updateStatusDisplay(bleManager.isConnected(), loraManager.getSyncWord(), lastReceivedMessage);
         return;
     }
@@ -515,8 +570,9 @@ void onGPIOControl(const String& command) {
     if (state != 0 && state != 1) {
         Serial.print("ERROR: Invalid state (must be 0 or 1): ");
         Serial.println(state);
-        showStatus("Invalid State!");
-        delay(1500);
+        String errorMsg = "State must be 0/1";
+        showStatus(errorMsg);
+        delay(2000);
         updateStatusDisplay(bleManager.isConnected(), loraManager.getSyncWord(), lastReceivedMessage);
         return;
     }
@@ -547,10 +603,10 @@ void onGPIOControl(const String& command) {
     Serial.print(" set to ");
     Serial.println(state ? "HIGH" : "LOW");
     
-    // Update display
-    String displayMsg = "GPIO " + String(pin) + " " + String(state ? "ON" : "OFF");
+    // Update display with success message
+    String displayMsg = "OK: GPIO" + String(pin) + "=" + String(state ? "ON" : "OFF");
     showStatus(displayMsg);
-    delay(2000);
+    delay(2500);
     
     // Return to normal display
     updateStatusDisplay(bleManager.isConnected(), loraManager.getSyncWord(), lastReceivedMessage);
