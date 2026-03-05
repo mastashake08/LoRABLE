@@ -96,10 +96,11 @@ This is a LoRA BLE application for the **Heltec WiFi LoRA 32 V3** board that:
 ```ini
 ; In platformio.ini
 lib_deps = 
-    sandeepmistry/LoRa@^0.8.0
+    jgromes/RadioLib@^6.6.0
     thingpulse/ESP8266 and ESP32 OLED driver for SSD1306 displays@^4.4.0
-    bblanchon/ArduinoJson@^6.21.0
 ```
+
+**Note**: Heltec V3 uses SX1262 chip which requires RadioLib, not the sandeepmistry/LoRa library (which only supports SX127x chips).
 
 ## Coding Standards
 

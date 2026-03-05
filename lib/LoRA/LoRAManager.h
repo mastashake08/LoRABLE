@@ -2,20 +2,20 @@
 #define LORA_MANAGER_H
 
 #include <Arduino.h>
-#include <LoRa.h>
+#include <RadioLib.h>
 
 // LoRA SX1262 Pins for Heltec WiFi LoRA 32 V3
-#define LORA_SCK     9
-#define LORA_MISO    11
-#define LORA_MOSI    10
-#define LORA_NSS     8
-#define LORA_RST     12
-#define LORA_DIO1    14
-#define LORA_BUSY    13
+#define RADIO_SCLK_PIN    9
+#define RADIO_MISO_PIN    11
+#define RADIO_MOSI_PIN    10
+#define RADIO_CS_PIN      8
+#define RADIO_RST_PIN     12
+#define RADIO_DIO1_PIN    14
+#define RADIO_BUSY_PIN    13
 
 // Default LoRA Configuration
-#define LORA_FREQUENCY      915E6   // 915 MHz (adjust for your region: 433E6, 868E6, 915E6)
-#define LORA_BANDWIDTH      125E3   // 125 kHz
+#define LORA_FREQUENCY      915.0   // 915 MHz (adjust for your region: 433.0, 868.0, 915.0)
+#define LORA_BANDWIDTH      125.0   // 125 kHz
 #define LORA_SPREADING_FACTOR  7    // SF7 (6-12)
 #define LORA_CODING_RATE    5       // 4/5 (5-8 for 4/5-4/8)
 #define LORA_TX_POWER       20      // 20 dBm
@@ -93,6 +93,7 @@ public:
     float getSNR();
 
 private:
+    SX1262* radio;
     uint8_t currentSyncWord;
     int lastRSSI;
     float lastSNR;

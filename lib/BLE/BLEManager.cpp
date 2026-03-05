@@ -32,7 +32,7 @@ public:
     CharacteristicCallbacks(BLEManager* mgr) : manager(mgr) {}
     
     void onWrite(BLECharacteristic *pCharacteristic) {
-        std::string value = pCharacteristic->getValue();
+        String value = pCharacteristic->getValue();
         
         if (value.length() > 0) {
             uint8_t syncWord = (uint8_t)value[0];
@@ -85,9 +85,6 @@ bool BLEManager::init() {
     
     // Set characteristic callbacks
     pSyncWordCharacteristic->setCallbacks(new CharacteristicCallbacks(this));
-    
-    // Add descriptor for notifications
-    pSyncWordCharacteristic->addDescriptor(new BLE2902());
     
     // Set initial value
     pSyncWordCharacteristic->setValue(&currentSyncWord, 1);

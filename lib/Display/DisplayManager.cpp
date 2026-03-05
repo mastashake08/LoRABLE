@@ -12,8 +12,12 @@ bool DisplayManager::init() {
     enablePower();
     delay(100);  // Wait for power stabilization
     
+    // Initialize I2C bus
+    Wire.begin(OLED_SDA, OLED_SCL);
+    delay(50);
+    
     // Initialize display object
-    display = new SSD1306Wire(0x3c, OLED_SDA, OLED_SCL, GEOMETRY_128_64, RST_PIN, OLED_RST);
+    display = new SSD1306Wire(0x3c, OLED_SDA, OLED_SCL, GEOMETRY_128_64);
     
     // Initialize the display
     display->init();

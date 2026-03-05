@@ -4,6 +4,7 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include "SSD1306Wire.h"
+#include "OLEDDisplayFonts.h"
 
 // OLED Pins for Heltec WiFi LoRA 32 V3
 #define OLED_SDA     17

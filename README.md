@@ -54,7 +54,7 @@ A modular LoRA and Bluetooth Low Energy application for the **Heltec WiFi LoRA 3
 ### Using Arduino IDE
 
 1. Install required libraries via Library Manager:
-   - LoRa by Sandeep Mistry
+   - RadioLib by Jan Gromeš (for SX1262 LoRA chip)
    - ESP8266 and ESP32 OLED driver for SSD1306 displays
 
 2. Open `src/main.cpp` in Arduino IDE
@@ -62,6 +62,8 @@ A modular LoRA and Bluetooth Low Energy application for the **Heltec WiFi LoRA 3
 3. Select board: **Heltec WiFi LoRA 32 V3**
 
 4. Upload to board
+
+**Note:** The Heltec V3 uses the SX1262 LoRA chip which requires RadioLib, not the older sandeepmistry/LoRa library.
 
 ## Project Structure
 
@@ -142,8 +144,8 @@ Each module has detailed documentation:
 ### Default LoRA Settings
 
 ```cpp
-Frequency:         915 MHz (adjust for region)
-Bandwidth:         125 kHz
+Frequency:         915.0 MHz (adjust for region)
+Bandwidth:         125.0 kHz
 Spreading Factor:  7
 Coding Rate:       4/5
 TX Power:          20 dBm
@@ -154,11 +156,15 @@ Default SyncWord:  0x12
 
 Choose the appropriate frequency for your region in `lib/LoRA/LoRAManager.h`:
 
-- **433 MHz**: Europe, Asia (ISM band)
-- **868 MHz**: Europe
-- **915 MHz**: North America, Australia, South America
+- **433.0 MHz**: Europe, Asia (ISM band)
+- **868.0 MHz**: Europe
+- **915.0 MHz**: North America, Australia, South America
 
 **⚠️ Important**: Check local regulations before transmitting!
+
+### LoRA Library
+
+This project uses **RadioLib** instead of the older sandeepmistry/LoRa library because the Heltec V3 has an **SX1262** chip (not SX127x). RadioLib provides better support for modern LoRA chips.
 
 ## Development
 
@@ -183,13 +189,10 @@ git push origin v1.0.0
 ```
 
 This creates a GitHub Release with downloadable firmware binaries.
-
-## Troubleshooting
-
-### LoRA Not Working
-- Check antenna is connected
-- Verify frequency matches your region
+ (required!)
+- Verify frequency matches your region (915.0 for US)
 - Ensure both devices have same syncWord
+- Check serial output for error codes from RadioLib
 
 ### BLE Not Visible
 - Check Bluetooth is enabled on phone
@@ -199,8 +202,19 @@ This creates a GitHub Release with downloadable firmware binaries.
 ### Display Not Working
 - VEXT_CTRL pin controls power (active LOW)
 - Check I2C connections (pins 17, 18)
+- Display init includes Wire.begin() call
 - Reset display if corrupted
 
+### No Serial Output
+- Check baud rate is 115200
+- Ensure USB cable supports data
+- Try different USB port
+
+### RadioLib Error Codes
+If you see "LoRA initialization failed, code: X":
+- `-2` (RADIOLIB_ERR_CHIP_NOT_FOUND): Check wiring and pins
+- `-3` (RADIOLIB_ERR_SPI_CMD_TIMEOUT): SPI communication issue
+- See [RadioLib documentation](https://jgromes.github.io/RadioLib/) for more codes
 ### No Serial Output
 - Check baud rate is 115200
 - Ensure USB cable supports data
@@ -212,12 +226,12 @@ This project follows a modular architecture. When contributing:
 
 1. Keep modules independent and focused
 2. Follow existing code style (PascalCase for classes, camelCase for methods)
-3. Add documentation for new features
-4. Test modules independently
-5. Update READMEs
+3. Add documeRadioLib (Jan Gromeš), SSD1306 (ThingPulse)
 
-## License
+## References
 
+- [Heltec WiFi LoRA 32 V3 Documentation](https://heltec.org/project/wifi-lora-32-v3/)
+- [RadioLib Library](https://github.com/jgromes/RadioLib
 [Your License Here]
 
 ## Credits
