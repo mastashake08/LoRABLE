@@ -1,4 +1,8 @@
 #include "DisplayManager.h"
+#include <SSD1306Wire.h>
+
+// Note: display object is defined globally in main.cpp via heltec_unofficial.h
+extern SSD1306Wire display;
 
 DisplayManager::DisplayManager() 
     : lastUpdate(0) {
@@ -7,10 +11,8 @@ DisplayManager::DisplayManager()
 bool DisplayManager::init() {
     Serial.println("Initializing Display...");
     
-    // Initialize Heltec display (library handles all pins and power)
-    heltec_setup();
-    
-    // Clear and setup display
+    // Display is already initialized by heltec_setup() in main.cpp
+    // Just configure it here
     display.clear();
     display.setFont(ArialMT_Plain_10);
     display.setTextAlignment(TEXT_ALIGN_LEFT);

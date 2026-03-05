@@ -12,6 +12,7 @@
  */
 
 #include <Arduino.h>
+#include <heltec_unofficial.h>
 #include "BLEManager.h"
 #include "LoRAManager.h"
 #include "DisplayManager.h"
@@ -59,7 +60,11 @@ void setup() {
     Serial.println("        LoRABLE Starting...        ");
     Serial.println("====================================");
     
-    // Initialize Display first (for visual feedback)
+    // Initialize Heltec hardware (display, LoRA radio, etc.)
+    heltec_setup();
+    Serial.println("Heltec hardware initialized");
+    
+    // Initialize Display (already initialized by heltec_setup, just configure it)
     if (!displayManager.init()) {
         Serial.println("ERROR: Display initialization failed!");
     }
@@ -147,6 +152,9 @@ void loop() {
         );
         lastDisplayUpdate = millis();
     }
+    
+    // Call heltec_loop for display and button handling
+    heltec_loop();
     
     // Small delay to prevent CPU hogging
     delay(10);

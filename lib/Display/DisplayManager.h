@@ -2,7 +2,6 @@
 #define DISPLAY_MANAGER_H
 
 #include <Arduino.h>
-#include <heltec_unofficial.h>
 
 // Display dimensions
 #define SCREEN_WIDTH  128
