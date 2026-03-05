@@ -8,9 +8,13 @@
 #include <BLE2902.h>
 
 // BLE Service and Characteristic UUIDs
-#define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
-#define SYNCWORD_CHAR_UUID  "beb5483e-36e1-4688-b7f5-ea07361b26a8"
-#define MESSAGE_CHAR_UUID   "a3c87500-8ed3-4bdf-8a39-a01bebede295"
+#define SERVICE_UUID           "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
+#define SYNCWORD_CHAR_UUID     "beb5483e-36e1-4688-b7f5-ea07361b26a8"
+#define MESSAGE_CHAR_UUID      "a3c87500-8ed3-4bdf-8a39-a01bebede295"
+
+// Battery Service (Standard Bluetooth SIG UUID)
+#define BATTERY_SERVICE_UUID   BLEUUID((uint16_t)0x180F)
+#define BATTERY_LEVEL_CHAR_UUID BLEUUID((uint16_t)0x2A19)
 
 /**
  * BLEManager - Manages Bluetooth Low Energy operations
@@ -57,13 +61,27 @@ public:
      * @param syncWord New syncWord byte value
      */
     void setSyncWord(uint8_t syncWord);
+    
+    /**
+     * Update battery level
+     * @param level Battery level percentage (0-100)
+     */
+    void updateBatteryLevel(uint8_t level);
+    
+    /**
+     * Get current battery level from ADC
+     * @return Battery level percentage (0-100)
+     */
+    uint8_t getBatteryLevel();
 
 private:
     BLEServer* pServer;
     BLECharacteristic* pSyncWordCharacteristic;
     BLECharacteristic* pMessageCharacteristic;
+    BLECharacteristic* pBatteryLevelCharacteristic;
     bool deviceConnected;
     uint8_t currentSyncWord;
+    uint8_t batteryLevel;
     void (*syncWordCallback)(uint8_t);
     void (*messageCallback)(const String&);
     

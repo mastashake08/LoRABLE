@@ -36,7 +36,9 @@ ConfigManager configManager;
 String lastReceivedMessage = "";
 String lastSentMessage = "";
 unsigned long lastDisplayUpdate = 0;
+unsigned long lastBatteryUpdate = 0;
 const unsigned long DISPLAY_UPDATE_INTERVAL = 1000;  // Update display every 1 second
+const unsigned long BATTERY_UPDATE_INTERVAL = 30000; // Update battery every 30 seconds
 
 // Display helper functions
 void initDisplay() {
@@ -263,8 +265,16 @@ void setup() {
     
     // Set BLE callback
     bleManager.setSyncWordCallback(onSyncWordChanged);
+    bleManager.setMessageCallback(onMessageReceived);
     // Set initial syncWord in BLE characteristic
     bleManager.setSyncWord(savedSyncWord);
+    
+    // Update initial battery level
+    uint8_t initialBatteryLevel = bleManager.getBatteryLevel();
+    bleManager.updateBatteryLevel(initialBatteryLevel);
+    Serial.print("Initial battery level: ");
+    Serial.print(initialBatteryLevel);
+    Serial.println("%");
     
     // Print current configuration
     configManager.printSettings();
@@ -311,6 +321,13 @@ void loop() {
             lastReceivedMessage
         );
         lastDisplayUpdate = millis();
+    }
+    
+    // Periodically update battery level
+    if (millis() - lastBatteryUpdate > BATTERY_UPDATE_INTERVAL) {
+        uint8_t batteryLevel = bleManager.getBatteryLevel();
+        bleManager.updateBatteryLevel(batteryLevel);
+        lastBatteryUpdate = millis();
     }
     
     // Small delay to prevent CPU hogging
