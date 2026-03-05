@@ -96,6 +96,48 @@ int ConfigManager::loadTxPower(int defaultValue) {
     return power;
 }
 
+void ConfigManager::saveWiFiCredentials(const String& ssid, const String& password) {
+    preferences.begin(PREFS_NAMESPACE, false);
+    preferences.putString(KEY_WIFI_SSID, ssid);
+    preferences.putString(KEY_WIFI_PASSWORD, password);
+    preferences.end();
+    
+    Serial.println("Saved WiFi credentials to config");
+    Serial.print("SSID: ");
+    Serial.println(ssid);
+}
+
+String ConfigManager::loadWiFiSSID() {
+    preferences.begin(PREFS_NAMESPACE, true);
+    String ssid = preferences.getString(KEY_WIFI_SSID, "");
+    preferences.end();
+    
+    return ssid;
+}
+
+String ConfigManager::loadWiFiPassword() {
+    preferences.begin(PREFS_NAMESPACE, true);
+    String password = preferences.getString(KEY_WIFI_PASSWORD, "");
+    preferences.end();
+    
+    return password;
+}
+
+bool ConfigManager::hasWiFiCredentials() {
+    String ssid = loadWiFiSSID();
+    String password = loadWiFiPassword();
+    return (ssid.length() > 0 && password.length() > 0);
+}
+
+void ConfigManager::clearWiFiCredentials() {
+    preferences.begin(PREFS_NAMESPACE, false);
+    preferences.remove(KEY_WIFI_SSID);
+    preferences.remove(KEY_WIFI_PASSWORD);
+    preferences.end();
+    
+    Serial.println("WiFi credentials cleared from config");
+}
+
 void ConfigManager::clearAll() {
     preferences.begin(PREFS_NAMESPACE, false);
     preferences.clear();
@@ -113,6 +155,8 @@ void ConfigManager::printSettings() {
     long frequency = preferences.getLong(KEY_FREQUENCY, 915E6);
     int sf = preferences.getInt(KEY_SF, 7);
     int power = preferences.getInt(KEY_TX_POWER, 20);
+    String ssid = preferences.getString(KEY_WIFI_SSID, "");
+    bool hasPassword = preferences.getString(KEY_WIFI_PASSWORD, "").length() > 0;
     
     preferences.end();
     
@@ -126,5 +170,15 @@ void ConfigManager::printSettings() {
     Serial.print("TX Power: ");
     Serial.print(power);
     Serial.println(" dBm");
+    
+    // WiFi credentials (show SSID only, not password)
+    if (ssid.length() > 0) {
+        Serial.print("WiFi SSID: ");
+        Serial.println(ssid);
+        Serial.println("WiFi Password: [CONFIGURED]");
+    } else {
+        Serial.println("WiFi: Not configured");
+    }
+    
     Serial.println("============================");
 }

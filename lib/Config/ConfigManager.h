@@ -13,6 +13,8 @@
 #define KEY_SF          "spreadingFactor"
 #define KEY_BANDWIDTH   "bandwidth"
 #define KEY_TX_POWER    "txPower"
+#define KEY_WIFI_SSID   "wifiSSID"
+#define KEY_WIFI_PASSWORD "wifiPassword"
 
 /**
  * ConfigManager - Manages persistent configuration storage
@@ -81,6 +83,36 @@ public:
      * @return Stored TX power or default value
      */
     int loadTxPower(int defaultValue = 20);
+    
+    /**
+     * Save WiFi credentials
+     * @param ssid WiFi network SSID
+     * @param password WiFi network password
+     */
+    void saveWiFiCredentials(const String& ssid, const String& password);
+    
+    /**
+     * Load WiFi SSID
+     * @return Stored SSID or empty string
+     */
+    String loadWiFiSSID();
+    
+    /**
+     * Load WiFi password
+     * @return Stored password or empty string
+     */
+    String loadWiFiPassword();
+    
+    /**
+     * Check if WiFi credentials are configured
+     * @return true if both SSID and password are stored
+     */
+    bool hasWiFiCredentials();
+    
+    /**
+     * Clear WiFi credentials from storage
+     */
+    void clearWiFiCredentials();
     
     /**
      * Clear all stored preferences

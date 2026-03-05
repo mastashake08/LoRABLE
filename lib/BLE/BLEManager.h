@@ -11,6 +11,8 @@
 #define SERVICE_UUID           "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
 #define SYNCWORD_CHAR_UUID     "beb5483e-36e1-4688-b7f5-ea07361b26a8"
 #define MESSAGE_CHAR_UUID      "a3c87500-8ed3-4bdf-8a39-a01bebede295"
+#define WIFI_SSID_CHAR_UUID    "7c8a8e48-68c9-4e3f-a3e6-8f6e7b8c9d0a"
+#define WIFI_PASSWORD_CHAR_UUID "8d9b9f59-79da-4f40-b4f7-9f7e8c9d0e1b"
 
 // Battery Service (Standard Bluetooth SIG UUID)
 #define BATTERY_SERVICE_UUID   BLEUUID((uint16_t)0x180F)
@@ -43,6 +45,12 @@ public:
      * @param callback Function pointer that takes String message parameter
      */
     void setMessageCallback(void (*callback)(const String&));
+    
+    /**
+     * Set callback function to be called when WiFi credentials are changed via BLE
+     * @param callback Function pointer that takes SSID and password
+     */
+    void setWiFiCallback(void (*callback)(const String&, const String&));
     
     /**
      * Check if a BLE client is currently connected
@@ -79,11 +87,16 @@ private:
     BLECharacteristic* pSyncWordCharacteristic;
     BLECharacteristic* pMessageCharacteristic;
     BLECharacteristic* pBatteryLevelCharacteristic;
+    BLECharacteristic* pWiFiSSIDCharacteristic;
+    BLECharacteristic* pWiFiPasswordCharacteristic;
     bool deviceConnected;
     uint8_t currentSyncWord;
     uint8_t batteryLevel;
+    String wifiSSID;
+    String wifiPassword;
     void (*syncWordCallback)(uint8_t);
     void (*messageCallback)(const String&);
+    void (*wifiCallback)(const String&, const String&);
     
     // Callback classes for BLE events
     class ServerCallbacks;

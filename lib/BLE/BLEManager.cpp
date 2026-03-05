@@ -27,43 +27,62 @@ public:
 class BLEManager::CharacteristicCallbacks: public BLECharacteristicCallbacks {
 private:
     BLEManager* manager;
-    bool isMessageCharacteristic;
+    enum CharType { SYNCWORD, MESSAGE, WIFI_SSID, WIFI_PASSWORD };
+    CharType charType;
     
 public:
-    CharacteristicCallbacks(BLEManager* mgr, bool isMessage = false) 
-        : manager(mgr), isMessageCharacteristic(isMessage) {}
+    CharacteristicCallbacks(BLEManager* mgr, CharType type) 
+        : manager(mgr), charType(type) {}
     
     void onWrite(BLECharacteristic *pCharacteristic) {
         String value = pCharacteristic->getValue();
         
         if (value.length() > 0) {
-            if (isMessageCharacteristic) {
-                // Handle message characteristic
-                Serial.print("Received message via BLE: ");
-                Serial.println(value);
-                
-                // Trigger message callback if set
-                if (manager->messageCallback != nullptr) {
-                    manager->messageCallback(value);
-                }
-            } else {
-                // Handle syncWord characteristic
-                uint8_t syncWord = (uint8_t)value[0];
-                manager->currentSyncWord = syncWord;
-                
-                Serial.print("Received new syncWord via BLE: 0x");
-                Serial.println(syncWord, HEX);
-                
-                // Trigger callback if set
-                if (manager->syncWordCallback != nullptr) {
-                    manager->syncWordCallback(syncWord);
-                }
+            switch(charType) {
+                case MESSAGE:
+                    Serial.print("Received message via BLE: ");
+                    Serial.println(value);
+                    if (manager->messageCallback != nullptr) {
+                        manager->messageCallback(value);
+                    }
+                    break;
+                    
+                case SYNCWORD:
+                    {
+                        uint8_t syncWord = (uint8_t)value[0];
+                        manager->currentSyncWord = syncWord;
+                        Serial.print("Received new syncWord via BLE: 0x");
+                        Serial.println(syncWord, HEX);
+                        if (manager->syncWordCallback != nullptr) {
+                            manager->syncWordCallback(syncWord);
+                        }
+                    }
+                    break;
+                    
+                case WIFI_SSID:
+                    manager->wifiSSID = value;
+                    Serial.print("Received WiFi SSID via BLE: ");
+                    Serial.println(value);
+                    // Trigger callback only when both SSID and password are set
+                    if (manager->wifiPassword.length() > 0 && manager->wifiCallback != nullptr) {
+                        manager->wifiCallback(manager->wifiSSID, manager->wifiPassword);
+                    }
+                    break;
+                    
+                case WIFI_PASSWORD:
+                    manager->wifiPassword = value;
+                    Serial.println("Received WiFi Password via BLE");
+                    // Trigger callback only when both SSID and password are set
+                    if (manager->wifiSSID.length() > 0 && manager->wifiCallback != nullptr) {
+                        manager->wifiCallback(manager->wifiSSID, manager->wifiPassword);
+                    }
+                    break;
             }
         }
     }
     
     void onRead(BLECharacteristic *pCharacteristic) {
-        if (!isMessageCharacteristic) {
+        if (charType == SYNCWORD) {
             Serial.print("SyncWord read via BLE: 0x");
             Serial.println(manager->currentSyncWord, HEX);
         }
@@ -75,11 +94,16 @@ BLEManager::BLEManager()
       pSyncWordCharacteristic(nullptr),
       pMessageCharacteristic(nullptr),
       pBatteryLevelCharacteristic(nullptr),
+      pWiFiSSIDCharacteristic(nullptr),
+      pWiFiPasswordCharacteristic(nullptr),
       deviceConnected(false),
       currentSyncWord(0x12),  // Default syncWord
       batteryLevel(100),     // Default battery level
+      wifiSSID(""),
+      wifiPassword(""),
       syncWordCallback(nullptr),
-      messageCallback(nullptr) {
+      messageCallback(nullptr),
+      wifiCallback(nullptr) {
 }
 
 bool BLEManager::init() {
@@ -108,8 +132,8 @@ bool BLEManager::init() {
     // Add BLE2902 descriptor for notifications
     pSyncWordCharacteristic->addDescriptor(new BLE2902());
     
-    // Set characteristic callbacks
-    pSyncWordCharacteristic->setCallbacks(new CharacteristicCallbacks(this, false));
+    // Set characteristic callbacks - use SYNCWORD enum
+    pSyncWordCharacteristic->setCallbacks(new CharacteristicCallbacks(this, CharacteristicCallbacks::SYNCWORD));
     
     // Add descriptor for user-friendly name
     BLEDescriptor *pSyncWordDescriptor = new BLEDescriptor((uint16_t)0x2901);
@@ -128,8 +152,8 @@ bool BLEManager::init() {
         BLECharacteristic::PROPERTY_WRITE
     );
     
-    // Set message characteristic callbacks
-    pMessageCharacteristic->setCallbacks(new CharacteristicCallbacks(this, true));
+    // Set message characteristic callbacks - use MESSAGE enum
+    pMessageCharacteristic->setCallbacks(new CharacteristicCallbacks(this, CharacteristicCallbacks::MESSAGE));
     
     // Add descriptor for user-friendly name
     BLEDescriptor *pMessageDescriptor = new BLEDescriptor((uint16_t)0x2901);
@@ -140,6 +164,41 @@ bool BLEManager::init() {
     pMessageCharacteristic->setValue("");
     
     Serial.println("Message characteristic created");
+    
+    // Create WiFi SSID Characteristic
+    pWiFiSSIDCharacteristic = pService->createCharacteristic(
+        WIFI_SSID_CHAR_UUID,
+        BLECharacteristic::PROPERTY_READ |
+        BLECharacteristic::PROPERTY_WRITE
+    );
+    
+    // Set WiFi SSID characteristic callbacks
+    pWiFiSSIDCharacteristic->setCallbacks(new CharacteristicCallbacks(this, CharacteristicCallbacks::WIFI_SSID));
+    
+    // Add descriptor for user-friendly name
+    BLEDescriptor *pSSIDDescriptor = new BLEDescriptor((uint16_t)0x2901);
+    pSSIDDescriptor->setValue("WiFi SSID");
+    pWiFiSSIDCharacteristic->addDescriptor(pSSIDDescriptor);
+    pWiFiSSIDCharacteristic->setValue("");
+    
+    Serial.println("WiFi SSID characteristic created");
+    
+    // Create WiFi Password Characteristic
+    pWiFiPasswordCharacteristic = pService->createCharacteristic(
+        WIFI_PASSWORD_CHAR_UUID,
+        BLECharacteristic::PROPERTY_WRITE
+    );
+    
+    // Set WiFi Password characteristic callbacks
+    pWiFiPasswordCharacteristic->setCallbacks(new CharacteristicCallbacks(this, CharacteristicCallbacks::WIFI_PASSWORD));
+    
+    // Add descriptor for user-friendly name
+    BLEDescriptor *pPasswordDescriptor = new BLEDescriptor((uint16_t)0x2901);
+    pPasswordDescriptor->setValue("WiFi Password");
+    pWiFiPasswordCharacteristic->addDescriptor(pPasswordDescriptor);
+    pWiFiPasswordCharacteristic->setValue("");
+    
+    Serial.println("WiFi Password characteristic created");
     
     // Start LoRABLE service
     pService->start();
@@ -195,6 +254,10 @@ void BLEManager::setSyncWordCallback(void (*callback)(uint8_t)) {
 
 void BLEManager::setMessageCallback(void (*callback)(const String&)) {
     messageCallback = callback;
+}
+
+void BLEManager::setWiFiCallback(void (*callback)(const String&, const String&)) {
+    wifiCallback = callback;
 }
 
 bool BLEManager::isConnected() {

@@ -14,6 +14,9 @@
 #include <Arduino.h>
 #include <U8g2lib.h>
 #include <Wire.h>
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <Update.h>
 #include "BLEManager.h"
 #include "LoRAManager.h"
 #include "ConfigManager.h"
@@ -196,6 +199,95 @@ void onMessageReceived(const String& message) {
 }
 
 /**
+ * Connect to WiFi with stored credentials (used only on boot for OTA)
+ * @return true if connected, false if failed
+ */
+bool connectToWiFiForOTA(const String& ssid, const String& password) {
+    if (ssid.length() == 0) {
+        Serial.println("No WiFi credentials configured");
+        return false;
+    }
+    
+    Serial.println("Connecting to WiFi for OTA check...");
+    Serial.print("SSID: ");
+    Serial.println(ssid);
+    
+    showStatus("WiFi: Checking OTA");
+    
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(ssid.c_str(), password.c_str());
+    
+    unsigned long startAttempt = millis();
+    // Try for 10 seconds
+    while (WiFi.status() != WL_CONNECTED && millis() - startAttempt < 10000) {
+        delay(500);
+        Serial.print(".");
+    }
+    Serial.println();
+    
+    if (WiFi.status() == WL_CONNECTED) {
+        Serial.println("WiFi connected!");
+        Serial.print("IP address: ");
+        Serial.println(WiFi.localIP());
+        return true;
+    } else {
+        Serial.println("WiFi connection failed");
+        return false;
+    }
+}
+
+/**
+ * Check for OTA updates
+ * TODO: Implement your OTA update logic here
+ * @param firmwareUrl URL to check for firmware updates
+ */
+void checkForOTAUpdate(const String& firmwareUrl) {
+    Serial.println("Checking for OTA updates...");
+    showStatus("Checking OTA...");
+    
+    // TODO: Implement OTA update check
+    // Example:
+    // HTTPClient http;
+    // http.begin(firmwareUrl);
+    // int httpCode = http.GET();
+    // if (httpCode == HTTP_CODE_OK) {
+    //     int contentLength = http.getSize();
+    //     if (Update.begin(contentLength)) {
+    //         // Download and update
+    //     }
+    // }
+    // http.end();
+    
+    Serial.println("OTA check complete (not implemented yet)");
+    delay(1000);
+}
+
+/**
+ * Callback function called when WiFi credentials are changed via BLE
+ * Saves credentials for next boot - WiFi is only used for OTA on startup
+ */
+void onWiFiCredentialsChanged(const String& ssid, const String& password) {
+    Serial.println("=== WiFi Credentials Received ===");
+    Serial.print("SSID: ");
+    Serial.println(ssid);
+    
+    // Save to configuration for next boot
+    configManager.saveWiFiCredentials(ssid, password);
+    
+    Serial.println("WiFi credentials saved!");
+    Serial.println("WiFi will be used on next boot for OTA check only");
+    
+    // Show confirmation
+    showStatus("WiFi Saved!");
+    delay(2000);
+    showStatus("Reboot for OTA");
+    delay(2000);
+    
+    // Return to normal display
+    updateStatusDisplay(bleManager.isConnected(), loraManager.getSyncWord(), lastReceivedMessage);
+}
+
+/**
  * Callback function called when syncWord is changed via BLE
  * Updates LoRA configuration and saves to persistent storage
  */
@@ -257,19 +349,51 @@ void setup() {
     // Set saved syncWord
     loraManager.setSyncWord(savedSyncWord);
     
+    // Check for OTA updates if WiFi credentials are configured
+    Serial.println("\n=== OTA Update Check ===");
+    if (configManager.hasWiFiCredentials()) {
+        String ssid = configManager.loadWiFiSSID();
+        String password = configManager.loadWiFiPassword();
+        
+        if (connectToWiFiForOTA(ssid, password)) {
+            // TODO: Add your firmware URL here
+            // checkForOTAUpdate("http://yourserver.com/firmware.bin");
+            Serial.println("OTA check complete (configure firmware URL to enable)");
+            showStatus("OTA: Ready");
+            delay(1500);
+        } else {
+            Serial.println("WiFi connection failed - skipping OTA check");
+            showStatus("OTA: WiFi Failed");
+            delay(1500);
+        }
+        
+        // Disconnect WiFi after OTA check
+        Serial.println("Disconnecting WiFi...");
+        WiFi.disconnect(true);
+        WiFi.mode(WIFI_OFF);
+        delay(500);
+    } else {
+        Serial.println("No WiFi credentials - skipping OTA check");
+        Serial.println("Use BLE to configure WiFi for OTA updates");
+    }
+    Serial.println("=== WiFi OFF - BLE Mode ===");
+    
     // Initialize BLE
     if (!bleManager.init()) {
         Serial.println("ERROR: BLE initialization failed!");
         showStatus("BLE Failed!");
     }
     
-    // Set BLE callback
+    // Set BLE callbacks
+    Serial.println("Setting up BLE callbacks...");
     bleManager.setSyncWordCallback(onSyncWordChanged);
     bleManager.setMessageCallback(onMessageReceived);
+    bleManager.setWiFiCallback(onWiFiCredentialsChanged);
     // Set initial syncWord in BLE characteristic
     bleManager.setSyncWord(savedSyncWord);
     
     // Update initial battery level
+    Serial.println("Reading battery level...");
     uint8_t initialBatteryLevel = bleManager.getBatteryLevel();
     bleManager.updateBatteryLevel(initialBatteryLevel);
     Serial.print("Initial battery level: ");
