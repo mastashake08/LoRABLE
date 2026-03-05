@@ -12,11 +12,20 @@
  */
 
 #include <Arduino.h>
-#define HELTEC_POWER_BUTTON   // Required for proper display initialization
-#include <heltec_unofficial.h>
+#include <U8g2lib.h>
+#include <Wire.h>
 #include "BLEManager.h"
 #include "LoRAManager.h"
 #include "ConfigManager.h"
+
+// Heltec V3 Display pins
+#define OLED_SDA 17  // GPIO 17 for SDA
+#define OLED_SCL 18  // GPIO 18 for SCL
+#define OLED_RST 21
+#define VEXT_CTRL 36  // Display power control
+
+// U8g2 Constructor for SSD1306 128x64 I2C display
+U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, OLED_RST, OLED_SCL, OLED_SDA);
 
 // Module instances
 BLEManager bleManager;
@@ -29,66 +38,94 @@ unsigned long lastDisplayUpdate = 0;
 const unsigned long DISPLAY_UPDATE_INTERVAL = 1000;  // Update display every 1 second
 
 // Display helper functions
+void initDisplay() {
+    // Power on display
+    pinMode(VEXT_CTRL, OUTPUT);
+    digitalWrite(VEXT_CTRL, LOW);  // LOW = ON for Heltec V3
+    delay(100);
+    
+    // Initialize I2C with custom pins
+    Wire.begin(OLED_SDA, OLED_SCL);
+    delay(100);
+    
+    // Initialize U8g2
+    u8g2.begin();
+    u8g2.setFont(u8g2_font_6x10_tf);
+    u8g2.setFontRefHeightExtendedText();
+    u8g2.setDrawColor(1);
+    u8g2.setFontPosTop();
+    u8g2.setFontDirection(0);
+}
+
 void showStartupScreen() {
-    display.clear();
-    display.setFont(ArialMT_Plain_24);
-    display.setTextAlignment(TEXT_ALIGN_CENTER);
-    display.drawString(64, 15, "LoRABLE");
-    display.setFont(ArialMT_Plain_10);
-    display.drawString(64, 45, "Initializing...");
-    display.display();
+    u8g2.clearBuffer();
+    u8g2.setFont(u8g2_font_inb16_mr);  // Large font
+    u8g2.drawStr(20, 15, "LoRABLE");
+    u8g2.setFont(u8g2_font_6x10_tf);   // Small font
+    u8g2.drawStr(20, 45, "Initializing...");
+    u8g2.sendBuffer();
 }
 
 void showStatus(const String& message) {
-    display.clear();
-    display.setFont(ArialMT_Plain_16);
-    display.setTextAlignment(TEXT_ALIGN_CENTER);
-    display.drawString(64, 24, message);
-    display.display();
+    u8g2.clearBuffer();
+    u8g2.setFont(u8g2_font_8x13_tf);
+    
+    // Center text
+    int width = u8g2.getStrWidth(message.c_str());
+    int x = (128 - width) / 2;
+    u8g2.drawStr(x, 24, message.c_str());
+    
+    u8g2.sendBuffer();
 }
 
 void showMessage(const String& message, int rssi, float snr) {
-    display.clear();
-    display.setFont(ArialMT_Plain_10);
-    display.setTextAlignment(TEXT_ALIGN_LEFT);
-    display.drawString(0, 0, "Received:");
+    u8g2.clearBuffer();
+    u8g2.setFont(u8g2_font_6x10_tf);
     
-    // Display message (word wrap if needed)
-    display.setFont(ArialMT_Plain_16);
-    display.drawString(0, 15, message);
+    // Header
+    u8g2.drawStr(0, 0, "Received:");
     
-    // Show signal quality
-    display.setFont(ArialMT_Plain_10);
-    display.drawString(0, 38, "RSSI: " + String(rssi) + " dBm");
-    display.drawString(0, 50, "SNR: " + String(snr, 1) + " dB");
+    // Message (truncate if too long)
+    u8g2.setFont(u8g2_font_8x13_tf);
+    String displayMsg = message.substring(0, min(16, (int)message.length()));
+    u8g2.drawStr(0, 15, displayMsg.c_str());
     
-    display.display();
+    // Signal quality
+    u8g2.setFont(u8g2_font_6x10_tf);
+    String rssiStr = "RSSI: " + String(rssi) + " dBm";
+    u8g2.drawStr(0, 38, rssiStr.c_str());
+    
+    String snrStr = "SNR: " + String(snr, 1) + " dB";
+    u8g2.drawStr(0, 50, snrStr.c_str());
+    
+    u8g2.sendBuffer();
 }
 
 void updateStatusDisplay(bool bleConnected, uint8_t syncWord, const String& lastMsg) {
-    display.clear();
-    display.setFont(ArialMT_Plain_10);
-    display.setTextAlignment(TEXT_ALIGN_LEFT);
+    u8g2.clearBuffer();
+    u8g2.setFont(u8g2_font_6x10_tf);
     
     // BLE status
-    display.drawString(0, 0, "BLE: " + String(bleConnected ? "Connected" : "Waiting..."));
+    String bleStatus = "BLE: " + String(bleConnected ? "Connected" : "Waiting...");
+    u8g2.drawStr(0, 0, bleStatus.c_str());
     
     // SyncWord
-    display.drawString(0, 12, "SyncWord: 0x" + String(syncWord, HEX));
+    String syncStr = "SyncWord: 0x" + String(syncWord, HEX);
+    u8g2.drawStr(0, 12, syncStr.c_str());
     
     // Last message preview
-    display.drawString(0, 24, "Last msg:");
+    u8g2.drawStr(0, 24, "Last msg:");
     if (lastMsg.length() > 0) {
         String preview = lastMsg.substring(0, min(16, (int)lastMsg.length()));
-        display.drawString(0, 36, preview);
+        u8g2.drawStr(0, 36, preview.c_str());
     } else {
-        display.drawString(0, 36, "(none)");
+        u8g2.drawStr(0, 36, "(none)");
     }
     
     // Listening indicator
-    display.drawString(0, 54, "Listening for LoRA...");
+    u8g2.drawStr(0, 54, "Listening for LoRA...");
     
-    display.display();
+    u8g2.sendBuffer();
 }
 
 /**
@@ -113,20 +150,23 @@ void onSyncWordChanged(uint8_t newSyncWord) {
 }
 
 void setup() {
-    // Initialize Heltec hardware first (Serial at 115200, display, button)
-    heltec_setup();
+    // Initialize Serial
+    Serial.begin(115200);
+    delay(1000);
     
-    delay(500);  // Brief delay for hardware stabilization
-    
-    Serial.println("\n\n");
-    Serial.println("====================================");
+    Serial.println("\n\n====================================");
     Serial.println("        LoRABLE Starting...        ");
     Serial.println("====================================");
     
-    // Show startup screen
-    showStartupScreen();
-    delay(2000);
+    // Initialize Display
+    Serial.println("Initializing display...");
+    initDisplay();
     
+    // Show startup screen
+    Serial.println("Showing startup screen...");
+    showStartupScreen();
+    Serial.println("Startup screen displayed");
+    delay(2000);  // Show startup screen for 2 seconds
     // Initialize Config Manager
     if (!configManager.init()) {
         Serial.println("ERROR: Config initialization failed!");
@@ -140,7 +180,6 @@ void setup() {
         Serial.println("ERROR: LoRA initialization failed!");
         showStatus("LoRA Failed!");
         while(1) {
-            heltec_loop();
             delay(1000);  // Halt if LoRA fails
         }
     }
@@ -156,7 +195,6 @@ void setup() {
     
     // Set BLE callback
     bleManager.setSyncWordCallback(onSyncWordChanged);
-    
     // Set initial syncWord in BLE characteristic
     bleManager.setSyncWord(savedSyncWord);
     
@@ -175,9 +213,6 @@ void setup() {
 }
 
 void loop() {
-    // Call heltec_loop() for display/button management
-    heltec_loop();
-    
     // Check for incoming LoRA messages
     String message = loraManager.receiveMessage();
     
@@ -191,9 +226,6 @@ void loop() {
         
         // Display message with signal info
         showMessage(message, rssi, snr);
-        
-        // Keep message on screen for 5 seconds
-        delay(5000);
         
         // Return to status display
         updateStatusDisplay(
