@@ -6,8 +6,9 @@ The BLE module manages Bluetooth Low Energy operations for the LoRABLE applicati
 ## Features
 - BLE server initialization with custom service UUID
 - SyncWord characteristic (read/write/notify)
+- Message characteristic (write) for sending LoRA messages
 - Connection/disconnection event handling
-- Callback mechanism for syncWord changes
+- Callback mechanisms for syncWord changes and message reception
 - Auto-restart advertising after disconnection
 
 ## Usage
@@ -22,9 +23,16 @@ void onSyncWordChanged(uint8_t newSyncWord) {
     Serial.println(newSyncWord, HEX);
 }
 
+void onMessageReceived(const String& message) {
+    Serial.print("Message to send: ");
+    Serial.println(message);
+    // Send via LoRA
+}
+
 void setup() {
     bleManager.init();
     bleManager.setSyncWordCallback(onSyncWordChanged);
+    bleManager.setMessageCallback(onMessageReceived);
 }
 
 void loop() {
@@ -36,7 +44,13 @@ void loop() {
 
 ## BLE Service Details
 
-- **Service UUID**: `4fafc201-1fb5-459e-8fcc-c5c9c331914b`
+- **Service UUID**: `4fafc201-1fb5-459e-8fcc-c5c9c33191
+
+### Message Characteristic
+- **UUID**: `a3c87500-8ed3-4bdf-8a39-a01bebede295`
+- **Properties**: Write
+- **Data Type**: String (up to 255 bytes)
+- **Description**: Message to send via LoRA4b`
 - **Device Name**: `LoRABLE`
 
 ### SyncWord Characteristic
@@ -45,12 +59,26 @@ void loop() {
 - **Data Type**: 1 byte (0x00 - 0xFF)
 - **Description**: LoRA syncWord for network separation
 
-## Testing with nRF Connect
+
+**To change SyncWord:**
+5. Read/Write the SyncWord characteristic (beb5483e...)
+6. Write a single byte value (e.g., 0x34)
+
+**To send LoRA message:**
+5. Write to the Message characteristic (a3c87500...)
+6. Enter text message (e.g., "Hello LoRA!")
+7. The device will transmit this message via LoRA
 
 1. Install nRF Connect app on your smartphone
 2. Scan for "LoRABLE" device
 3. Connect to the device
 4. Navigate to the service UUID
+
+### `void setMessageCallback(void (*callback)(const String&))`
+Set callback function to be called when message is received via BLE.
+
+**Parameters:**
+- `callback`: Function pointer that takes `const String& message` parameter
 5. Read/Write the SyncWord characteristic
 
 ## API Reference

@@ -27,39 +27,57 @@ public:
 class BLEManager::CharacteristicCallbacks: public BLECharacteristicCallbacks {
 private:
     BLEManager* manager;
+    bool isMessageCharacteristic;
     
 public:
-    CharacteristicCallbacks(BLEManager* mgr) : manager(mgr) {}
+    CharacteristicCallbacks(BLEManager* mgr, bool isMessage = false) 
+        : manager(mgr), isMessageCharacteristic(isMessage) {}
     
     void onWrite(BLECharacteristic *pCharacteristic) {
         String value = pCharacteristic->getValue();
         
         if (value.length() > 0) {
-            uint8_t syncWord = (uint8_t)value[0];
-            manager->currentSyncWord = syncWord;
-            
-            Serial.print("Received new syncWord via BLE: 0x");
-            Serial.println(syncWord, HEX);
-            
-            // Trigger callback if set
-            if (manager->syncWordCallback != nullptr) {
-                manager->syncWordCallback(syncWord);
+            if (isMessageCharacteristic) {
+                // Handle message characteristic
+                Serial.print("Received message via BLE: ");
+                Serial.println(value);
+                
+                // Trigger message callback if set
+                if (manager->messageCallback != nullptr) {
+                    manager->messageCallback(value);
+                }
+            } else {
+                // Handle syncWord characteristic
+                uint8_t syncWord = (uint8_t)value[0];
+                manager->currentSyncWord = syncWord;
+                
+                Serial.print("Received new syncWord via BLE: 0x");
+                Serial.println(syncWord, HEX);
+                
+                // Trigger callback if set
+                if (manager->syncWordCallback != nullptr) {
+                    manager->syncWordCallback(syncWord);
+                }
             }
         }
     }
     
     void onRead(BLECharacteristic *pCharacteristic) {
-        Serial.print("SyncWord read via BLE: 0x");
-        Serial.println(manager->currentSyncWord, HEX);
+        if (!isMessageCharacteristic) {
+            Serial.print("SyncWord read via BLE: 0x");
+            Serial.println(manager->currentSyncWord, HEX);
+        }
     }
 };
 
 BLEManager::BLEManager() 
     : pServer(nullptr), 
       pSyncWordCharacteristic(nullptr),
+      pMessageCharacteristic(nullptr),
       deviceConnected(false),
       currentSyncWord(0x12),  // Default syncWord
-      syncWordCallback(nullptr) {
+      syncWordCallback(nullptr),
+      messageCallback(nullptr) {
 }
 
 bool BLEManager::init() {
@@ -82,10 +100,19 @@ bool BLEManager::init() {
         BLECharacteristic::PROPERTY_WRITE |
         BLECharacteristic::PROPERTY_NOTIFY
     );
+    , false));
     
-    // Set characteristic callbacks
-    pSyncWordCharacteristic->setCallbacks(new CharacteristicCallbacks(this));
+    // Set initial value
+    pSyncWordCharacteristic->setValue(&currentSyncWord, 1);
     
+    // Create Message Characteristic
+    pMessageCharacteristic = pService->createCharacteristic(
+        MESSAGE_CHAR_UUID,
+        BLECharacteristic::PROPERTY_WRITE
+    );
+    
+    // Set message characteristic callbacks
+    pMessageCharacteristic->setCallbacks(new CharacteristicCallbacks(this, true)
     // Set initial value
     pSyncWordCharacteristic->setValue(&currentSyncWord, 1);
     
@@ -97,7 +124,11 @@ bool BLEManager::init() {
     pAdvertising->addServiceUUID(SERVICE_UUID);
     pAdvertising->setScanResponse(true);
     pAdvertising->setMinPreferred(0x06);  // Functions for iPhone connection issues
-    pAdvertising->setMinPreferred(0x12);
+ 
+
+void BLEManager::setMessageCallback(void (*callback)(const String&)) {
+    messageCallback = callback;
+}   pAdvertising->setMinPreferred(0x12);
     BLEDevice::startAdvertising();
     
     Serial.println("BLE initialized successfully");

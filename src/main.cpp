@@ -34,6 +34,7 @@ ConfigManager configManager;
 
 // Application state
 String lastReceivedMessage = "";
+String lastSentMessage = "";
 unsigned long lastDisplayUpdate = 0;
 const unsigned long DISPLAY_UPDATE_INTERVAL = 1000;  // Update display every 1 second
 
@@ -101,7 +102,34 @@ void showMessage(const String& message, int rssi, float snr) {
     u8g2.sendBuffer();
 }
 
+void showSentMessage(const String& message) {
+    u8g2.clearBuffer();
+    u8g2.setFont(u8g2_font_6x10_tf);
+    
+    // Header
+    u8g2.drawStr(0, 0, "Sent via LoRA:");
+    
+    // Message (word wrap for long messages)
+    u8g2.setFont(u8g2_font_8x13_tf);
+    int y = 15;
+    int maxChars = 16;
+    
+    for (int i = 0; i < message.length(); i += maxChars) {
+        String line = message.substring(i, min(i + maxChars, (int)message.length()));
+        u8g2.drawStr(0, y, line.c_str());
+        y += 15;
+        if (y > 50) break;  // Don't overflow screen
+    }
+    
+    u8g2.sendBuffer();
+}
+
 void updateStatusDisplay(bool bleConnected, uint8_t syncWord, const String& lastMsg) {
+    Serial.print("Updating display - SyncWord: 0x");
+    Serial.print(syncWord, HEX);
+    Serial.print(", BLE: ");
+    Serial.println(bleConnected ? "Connected" : "Disconnected");
+    
     u8g2.clearBuffer();
     u8g2.setFont(u8g2_font_6x10_tf);
     
@@ -111,6 +139,7 @@ void updateStatusDisplay(bool bleConnected, uint8_t syncWord, const String& last
     
     // SyncWord
     String syncStr = "SyncWord: 0x" + String(syncWord, HEX);
+    syncStr.toUpperCase();  // Ensure hex is uppercase
     u8g2.drawStr(0, 12, syncStr.c_str());
     
     // Last message preview
@@ -126,6 +155,42 @@ void updateStatusDisplay(bool bleConnected, uint8_t syncWord, const String& last
     u8g2.drawStr(0, 54, "Listening for LoRA...");
     
     u8g2.sendBuffer();
+}
+
+/**
+ * Callback function called when message is received via BLE
+ * Sends the message via LoRA
+ */
+void onMessageReceived(const String& message) {
+    Serial.println("=== Message Received via BLE ===");
+    Serial.print("Message: ");
+    Serial.println(message);
+    
+    // Send via LoRA
+    showStatus("Sending...");
+    
+    if (loraManager.sendMessage(message)) {
+        Serial.println("Message sent via LoRA successfully");
+        lastSentMessage = message;
+        
+        // Show sent message
+        showSentMessage(message);
+        delay(2000);
+    } else {
+        Serial.println("Failed to send message via LoRA");
+        showStatus("Send Failed!");
+        delay(1500);
+    }
+    
+    // Return to status display
+    updateStatusDisplay(
+        bleManager.isConnected(), 
+        loraManager.getSyncWord(), 
+        lastReceivedMessage
+    );
+    
+    // Reset display update timer to prevent immediate overwrite
+    lastDisplayUpdate = millis();
 }
 
 /**
@@ -147,6 +212,9 @@ void onSyncWordChanged(uint8_t newSyncWord) {
     showStatus("SyncWord Updated!");
     delay(1500);
     updateStatusDisplay(bleManager.isConnected(), newSyncWord, lastReceivedMessage);
+    
+    // Reset display update timer to prevent immediate overwrite
+    lastDisplayUpdate = millis();
 }
 
 void setup() {

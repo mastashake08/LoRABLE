@@ -10,6 +10,7 @@
 // BLE Service and Characteristic UUIDs
 #define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
 #define SYNCWORD_CHAR_UUID  "beb5483e-36e1-4688-b7f5-ea07361b26a8"
+#define MESSAGE_CHAR_UUID   "a3c87500-8ed3-4bdf-8a39-a01bebede295"
 
 /**
  * BLEManager - Manages Bluetooth Low Energy operations
@@ -34,6 +35,12 @@ public:
     void setSyncWordCallback(void (*callback)(uint8_t));
     
     /**
+     * Set callback function to be called when message is received via BLE
+     * @param callback Function pointer that takes String message parameter
+     */
+    void setMessageCallback(void (*callback)(const String&));
+    
+    /**
      * Check if a BLE client is currently connected
      * @return true if connected, false otherwise
      */
@@ -54,9 +61,11 @@ public:
 private:
     BLEServer* pServer;
     BLECharacteristic* pSyncWordCharacteristic;
+    BLECharacteristic* pMessageCharacteristic;
     bool deviceConnected;
     uint8_t currentSyncWord;
     void (*syncWordCallback)(uint8_t);
+    void (*messageCallback)(const String&);
     
     // Callback classes for BLE events
     class ServerCallbacks;
