@@ -110,11 +110,25 @@ bool BLEManager::init() {
     // Create Message Characteristic
     pMessageCharacteristic = pService->createCharacteristic(
         MESSAGE_CHAR_UUID,
+        BLECharacteristic::PROPERTY_READ |
         BLECharacteristic::PROPERTY_WRITE
     );
     
     // Set message characteristic callbacks
     pMessageCharacteristic->setCallbacks(new CharacteristicCallbacks(this, true));
+    
+    // Add descriptor for user-friendly name
+    BLEDescriptor *pMessageDescriptor = new BLEDescriptor((uint16_t)0x2901);
+    pMessageDescriptor->setValue("LoRA Message");
+    pMessageCharacteristic->addDescriptor(pMessageDescriptor);
+    
+    // Set initial empty value
+    pMessageCharacteristic->setValue("");
+    
+    // Add descriptor for syncWord too
+    BLEDescriptor *pSyncWordDescriptor = new BLEDescriptor((uint16_t)0x2901);
+    pSyncWordDescriptor->setValue("Sync Word");
+    pSyncWordCharacteristic->addDescriptor(pSyncWordDescriptor);
     
     // Start service
     pService->start();
