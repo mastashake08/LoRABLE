@@ -25,14 +25,15 @@ public:
 
 // Characteristic callbacks for read/write events
 class BLEManager::CharacteristicCallbacks: public BLECharacteristicCallbacks {
-private:
-    BLEManager* manager;
-    enum CharType { SYNCWORD, MESSAGE, WIFI_SSID, WIFI_PASSWORD };
-    CharType charType;
-    
 public:
+    enum CharType { SYNCWORD, MESSAGE, WIFI_SSID, WIFI_PASSWORD };
+    
     CharacteristicCallbacks(BLEManager* mgr, CharType type) 
         : manager(mgr), charType(type) {}
+    
+private:
+    BLEManager* manager;
+    CharType charType;
     
     void onWrite(BLECharacteristic *pCharacteristic) {
         String value = pCharacteristic->getValue();
@@ -129,9 +130,6 @@ bool BLEManager::init() {
         BLECharacteristic::PROPERTY_NOTIFY
     );
     
-    // Add BLE2902 descriptor for notifications
-    pSyncWordCharacteristic->addDescriptor(new BLE2902());
-    
     // Set characteristic callbacks - use SYNCWORD enum
     pSyncWordCharacteristic->setCallbacks(new CharacteristicCallbacks(this, CharacteristicCallbacks::SYNCWORD));
     
@@ -213,9 +211,6 @@ bool BLEManager::init() {
         BLECharacteristic::PROPERTY_READ |
         BLECharacteristic::PROPERTY_NOTIFY
     );
-    
-    // Add BLE2902 descriptor for notifications
-    pBatteryLevelCharacteristic->addDescriptor(new BLE2902());
     
     // Add descriptor for battery level
     BLEDescriptor *pBatteryDescriptor = new BLEDescriptor((uint16_t)0x2901);
