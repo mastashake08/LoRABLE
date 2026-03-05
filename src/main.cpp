@@ -21,6 +21,9 @@
 #include "BLEManager.h"
 #include "LoRAManager.h"
 #include "ConfigManager.h"
+#include "ButtonManager.h"
+#include "SerialCommand.h"
+#include <esp_sleep.h>
 
 // Heltec V3 Display pins
 #define OLED_SDA 17  // GPIO 17 for SDA
@@ -35,12 +38,18 @@ U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, OLED_RST, OLED_SCL, OLED_SDA);
 BLEManager bleManager;
 LoRAManager loraManager;
 ConfigManager configManager;
+ButtonManager buttonManager;
+SerialCommand serialCommand;
 
 // Application state
 String lastReceivedMessage = "";
 String lastSentMessage = "";
 unsigned long lastDisplayUpdate = 0;
 unsigned long lastBatteryUpdate = 0;
+
+// Mode flags
+bool serialModeEnabled = false;
+bool sleepModeActive = false;
 const unsigned long DISPLAY_UPDATE_INTERVAL = 1000;  // Update display every 1 second
 const unsigned long BATTERY_UPDATE_INTERVAL = 30000; // Update battery every 30 seconds
 
@@ -139,28 +148,125 @@ void updateStatusDisplay(bool bleConnected, uint8_t syncWord, const String& last
     u8g2.clearBuffer();
     u8g2.setFont(u8g2_font_6x10_tf);
     
+    // Mode indicator at top
+    String modeStr = "Mode: BLE";
+    if (serialModeEnabled) {
+        modeStr += "+Serial";
+    }
+    u8g2.drawStr(0, 0, modeStr.c_str());
+    
     // BLE status
     String bleStatus = "BLE: " + String(bleConnected ? "Connected" : "Waiting...");
-    u8g2.drawStr(0, 0, bleStatus.c_str());
+    u8g2.drawStr(0, 12, bleStatus.c_str());
     
     // SyncWord
     String syncStr = "SyncWord: 0x" + String(syncWord, HEX);
     syncStr.toUpperCase();  // Ensure hex is uppercase
-    u8g2.drawStr(0, 12, syncStr.c_str());
+    u8g2.drawStr(0, 24, syncStr.c_str());
     
     // Last message preview
-    u8g2.drawStr(0, 24, "Last msg:");
+    u8g2.drawStr(0, 36, "Last msg:");
     if (lastMsg.length() > 0) {
         String preview = lastMsg.substring(0, min(16, (int)lastMsg.length()));
-        u8g2.drawStr(0, 36, preview.c_str());
+        u8g2.drawStr(0, 48, preview.c_str());
     } else {
-        u8g2.drawStr(0, 36, "(none)");
+        u8g2.drawStr(0, 48, "(none)");
     }
     
-    // Listening indicator
-    u8g2.drawStr(0, 54, "Listening for LoRA...");
-    
     u8g2.sendBuffer();
+}
+
+/**
+ * Show current status via serial
+ */
+void onStatusRequest() {
+    Serial.println("Current SyncWord: 0x" + String(loraManager.getSyncWord(), HEX));
+    Serial.println("BLE Connected: " + String(bleManager.isConnected() ? "Yes" : "No"));
+    Serial.println("Serial Mode: " + String(serialModeEnabled ? "Enabled" : "Disabled"));
+    Serial.println("Last Message: " + (lastReceivedMessage.length() > 0 ? lastReceivedMessage : "(none)"));
+}
+
+/**
+ * Callback for long press - Toggle sleep mode
+ */
+void onLongPress() {
+    Serial.println("\n=== LONG PRESS: Toggling Sleep Mode ===");
+    
+    sleepModeActive = !sleepModeActive;
+    
+    if (sleepModeActive) {
+        Serial.println("Entering sleep mode...");
+        
+        // Show sleep message on display
+        u8g2.clearBuffer();
+        u8g2.setFont(u8g2_font_8x13_tf);
+        int width = u8g2.getStrWidth("Sleep Mode");
+        int x = (128 - width) / 2;
+        u8g2.drawStr(x, 24, "Sleep Mode");
+        u8g2.setFont(u8g2_font_6x10_tf);
+        width = u8g2.getStrWidth("Press PRG 3s to wake");
+        x = (128 - width) / 2;
+        u8g2.drawStr(x, 40, "Press PRG 3s to wake");
+        u8g2.sendBuffer();
+        
+        delay(2000);
+        
+        // Configure PRG button as wake-up source
+        esp_sleep_enable_ext0_wakeup(GPIO_NUM_0, LOW);  // Wake on LOW (button press)
+        
+        Serial.println("Going to deep sleep...");
+        Serial.flush();
+        
+        // Enter deep sleep
+        esp_deep_sleep_start();
+        
+        // Note: Device will restart from setup() when awakened
+    } else {
+        Serial.println("Waking from sleep mode");
+        
+        // Show wake message
+        showStatus("Waking up...");
+        delay(1000);
+        
+        // Return to normal display
+        updateStatusDisplay(
+            bleManager.isConnected(), 
+            loraManager.getSyncWord(), 
+            lastReceivedMessage
+        );
+    }
+}
+
+/**
+ * Callback for double press - Toggle serial mode
+ */
+void onDoublePress() {
+    Serial.println("\n=== DOUBLE PRESS: Toggling Serial Mode ===");
+    
+    serialModeEnabled = !serialModeEnabled;
+    serialCommand.setEnabled(serialModeEnabled);
+    
+    // Show mode change on display
+    if (serialModeEnabled) {
+        showStatus("BLE + Serial Mode");
+        Serial.println("Serial commands enabled!");
+        Serial.println("Type HELP for commands");
+    } else {
+        showStatus("BLE Mode Only");
+        Serial.println("Serial commands disabled");
+    }
+    
+    delay(1500);
+    
+    // Return to status display
+    updateStatusDisplay(
+        bleManager.isConnected(), 
+        loraManager.getSyncWord(), 
+        lastReceivedMessage
+    );
+    
+    // Reset display update timer
+    lastDisplayUpdate = millis();
 }
 
 /**
@@ -335,6 +441,25 @@ void setup() {
         Serial.println("ERROR: Config initialization failed!");
     }
     
+    // Initialize Button Manager
+    Serial.println("Initializing button manager...");
+    buttonManager.init();
+    buttonManager.setLongPressCallback(onLongPress);
+    buttonManager.setDoublePressCallback(onDoublePress);
+    Serial.println("Button callbacks set:");
+    Serial.println("  - Long press (3s): Toggle sleep mode");
+    Serial.println("  - Double press: Toggle serial mode");
+    
+    // Initialize Serial Command Handler
+    Serial.println("Initializing serial command handler...");
+    serialCommand.init();
+    serialCommand.setSyncWordCallback(onSyncWordChanged);
+    serialCommand.setMessageCallback(onMessageReceived);
+    serialCommand.setWiFiCallback(onWiFiCredentialsChanged);
+    serialCommand.setStatusCallback(onStatusRequest);
+    serialCommand.setEnabled(false);  // Disabled by default
+    Serial.println("Serial command handler initialized (disabled)");
+    
     // Load saved configuration
     uint8_t savedSyncWord = configManager.loadSyncWord();
     
@@ -413,9 +538,19 @@ void setup() {
     Serial.println("Listening for LoRA messages...");
     Serial.println("Connect via BLE to change SyncWord");
     Serial.println();
+    Serial.println("Button Controls:");
+    Serial.println("  - Long press (3s): Toggle sleep mode");
+    Serial.println("  - Double press: Toggle BLE/BLE+Serial mode");
+    Serial.println();
 }
 
 void loop() {
+    // Update button manager (must be called frequently)
+    buttonManager.update();
+    
+    // Update serial command handler (if enabled)
+    serialCommand.update();
+    
     // Check for incoming LoRA messages
     String message = loraManager.receiveMessage();
     
