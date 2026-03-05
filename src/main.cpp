@@ -28,8 +28,13 @@
 // Heltec V3 Display pins
 #define OLED_SDA 17  // GPIO 17 for SDA
 #define OLED_SCL 18  // GPIO 18 for SCL
-#define OLED_RST 21
+#define OLED_RST 255  // Reset not used (GPIO 21 repurposed for potentiometer)
 #define VEXT_CTRL 36  // Display power control
+
+// Potentiometer for brightness control
+#define POT_PIN 21     // GPIO 21 for brightness potentiometer (ADC/Data)
+#define POT_VCC 19     // GPIO 19 for potentiometer VCC (power)
+#define POT_GND 48     // GPIO 48 for potentiometer GND (reference)
 
 // U8g2 Constructor for SSD1306 128x64 I2C display
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, OLED_RST, OLED_SCL, OLED_SDA);
@@ -47,6 +52,9 @@ String lastSentMessage = "";
 unsigned long lastDisplayUpdate = 0;
 unsigned long lastBatteryUpdate = 0;
 unsigned long lastHeartbeat = 0;
+unsigned long lastBrightnessUpdate = 0;
+uint8_t currentBrightness = 255;
+bool displayPoweredOn = true;
 
 // Mode flags
 bool serialModeEnabled = false;
@@ -54,6 +62,7 @@ bool sleepModeActive = false;
 const unsigned long DISPLAY_UPDATE_INTERVAL = 1000;  // Update display every 1 second
 const unsigned long BATTERY_UPDATE_INTERVAL = 30000; // Update battery every 30 seconds
 const unsigned long HEARTBEAT_INTERVAL = 10000;      // Print heartbeat every 10 seconds
+const unsigned long BRIGHTNESS_UPDATE_INTERVAL = 100; // Check brightness every 100ms
 
 // Display helper functions
 void initDisplay() {
@@ -73,6 +82,67 @@ void initDisplay() {
     u8g2.setDrawColor(1);
     u8g2.setFontPosTop();
     u8g2.setFontDirection(0);
+    
+    // Setup potentiometer pins for brightness control
+    pinMode(POT_VCC, OUTPUT);
+    digitalWrite(POT_VCC, HIGH);  // Provide 3.3V power to potentiometer
+    
+    pinMode(POT_GND, OUTPUT);
+    digitalWrite(POT_GND, LOW);   // Provide GND reference to potentiometer
+    
+    pinMode(POT_PIN, INPUT);      // Configure as analog input
+    
+    Serial.println("Potentiometer initialized:");
+    Serial.println("  VCC: GPIO 19 (HIGH)");
+    Serial.println("  Data: GPIO 21 (ADC)");
+    Serial.println("  GND: GPIO 48 (LOW)");
+}
+
+/**
+ * Update display brightness based on potentiometer reading
+ * GPIO 21 reads 0-4095 (12-bit ADC)
+ * Maps to 0-255 brightness (0 = display off)
+ */
+void updateDisplayBrightness() {
+    // Read potentiometer value (0-4095 for ESP32 12-bit ADC)
+    int potValue = analogRead(POT_PIN);
+    
+    // Map to brightness range 0-255
+    uint8_t brightness = map(potValue, 0, 4095, 0, 255);
+    
+    // Add hysteresis to prevent flickering at threshold
+    const int THRESHOLD = 10;  // Brightness threshold for turning off display
+    
+    if (brightness < THRESHOLD && displayPoweredOn) {
+        // Turn off display completely
+        digitalWrite(VEXT_CTRL, HIGH);  // HIGH = OFF for Heltec V3
+        displayPoweredOn = false;
+        currentBrightness = 0;
+        
+        Serial.println("Display OFF (brightness = 0)");
+    } 
+    else if (brightness >= THRESHOLD && !displayPoweredOn) {
+        // Turn on display
+        digitalWrite(VEXT_CTRL, LOW);  // LOW = ON for Heltec V3
+        delay(50);  // Give display time to power on
+        displayPoweredOn = true;
+        
+        Serial.print("Display ON (brightness = ");
+        Serial.print(brightness);
+        Serial.println(")");
+    }
+    
+    // Update contrast only if display is on and brightness changed significantly
+    if (displayPoweredOn && abs(brightness - currentBrightness) > 5) {
+        u8g2.setContrast(brightness);
+        currentBrightness = brightness;
+        
+        Serial.print("Brightness adjusted: ");
+        Serial.print(brightness);
+        Serial.print(" (pot value: ");
+        Serial.print(potValue);
+        Serial.println(")");
+    }
 }
 
 void showStartupScreen() {
@@ -823,6 +893,12 @@ void loop() {
         uint8_t batteryLevel = bleManager.getBatteryLevel();
         bleManager.updateBatteryLevel(batteryLevel);
         lastBatteryUpdate = millis();
+    }
+    
+    // Update display brightness based on potentiometer
+    if (millis() - lastBrightnessUpdate > BRIGHTNESS_UPDATE_INTERVAL) {
+        updateDisplayBrightness();
+        lastBrightnessUpdate = millis();
     }
     
     // Small delay to prevent CPU hogging
