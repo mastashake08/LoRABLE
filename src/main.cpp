@@ -22,7 +22,7 @@
 #include "ButtonManager.h"
 #include "SerialCommand.h"
 #include <esp_sleep.h>
-//#include "FactoryReturn.h"  // Include factory return functionality
+#include "FactoryReturn.h"  // Include factory return functionality
 
 // Heltec V3 Display pins
 #define OLED_SDA 17  // GPIO 17 for SDA
@@ -704,7 +704,7 @@ void onGPIOControl(const String& command) {
 }
 
 void setup() {
-    //checkFactoryReturn();
+    checkFactoryReturn();
     // Initialize Serial with longer timeout for USB CDC
     Serial.begin(115200);
     
