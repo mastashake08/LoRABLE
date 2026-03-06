@@ -12,8 +12,6 @@
  */
 
 #include <Arduino.h>
-#include <U8g2lib.h>
-#include <Wire.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <Update.h>
@@ -24,6 +22,7 @@
 #include "ButtonManager.h"
 #include "SerialCommand.h"
 #include <esp_sleep.h>
+//#include "FactoryReturn.h"  // Include factory return functionality
 
 // Heltec V3 Display pins
 #define OLED_SDA 17  // GPIO 17 for SDA
@@ -39,8 +38,8 @@
 // Built-in White LED
 #define LED_WHITE 35  // GPIO 35 for built-in white LED on Heltec V3
 
-// U8g2 Constructor for SSD1306 128x64 I2C display
-U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, OLED_RST, OLED_SCL, OLED_SDA);
+// Note: Using heltec library's built-in 'display' object instead of creating separate u8g2 instance
+// The display object is automatically initialized by heltec_setup()
 
 // Module instances
 BLEManager bleManager;
@@ -69,22 +68,14 @@ const unsigned long BRIGHTNESS_UPDATE_INTERVAL = 100; // Check brightness every 
 
 // Display helper functions
 void initDisplay() {
-    // Power on display
-    pinMode(VEXT_CTRL, OUTPUT);
-    digitalWrite(VEXT_CTRL, LOW);  // LOW = ON for Heltec V3
-    delay(100);
+    // heltec_setup() handles display initialization
+    Serial.println("Display already initialized by heltec_setup()");
     
-    // Initialize I2C with custom pins
-    Wire.begin(OLED_SDA, OLED_SCL);
-    delay(100);
+    // Set text alignment and font
+    display.setTextAlignment(TEXT_ALIGN_LEFT);
+    display.setFont(ArialMT_Plain_10);
     
-    // Initialize U8g2
-    u8g2.begin();
-    u8g2.setFont(u8g2_font_6x10_tf);
-    u8g2.setFontRefHeightExtendedText();
-    u8g2.setDrawColor(1);
-    u8g2.setFontPosTop();
-    u8g2.setFontDirection(0);
+    Serial.println("Display configured");
     
     // Setup potentiometer pins for brightness control (DISABLED)
     // pinMode(POT_VCC, OUTPUT);
@@ -149,77 +140,83 @@ void initDisplay() {
 // }
 
 void showStartupScreen() {
-    u8g2.clearBuffer();
-    u8g2.setFont(u8g2_font_inb16_mr);  // Large font
-    u8g2.drawStr(20, 15, "LoRABLE");
-    u8g2.setFont(u8g2_font_6x10_tf);   // Small font
+    Serial.println("showStartupScreen() called");
+    
+    display.clear();
+    Serial.println("Display cleared");
+    
+    display.setFont(ArialMT_Plain_16);  // Large font
+    display.drawString(20, 15, "LoRABLE");
+    Serial.println("LoRABLE title drawn");
+    
+    display.setFont(ArialMT_Plain_10);   // Small font
     
     // Show serial status
     if (Serial) {
-        u8g2.drawStr(10, 40, "Serial: Ready");
+        display.drawString(10, 40, "Serial: Ready");
     } else {
-        u8g2.drawStr(10, 40, "Serial: Waiting");
+        display.drawString(10, 40, "Serial: Waiting");
     }
     
-    u8g2.drawStr(10, 55, "Initializing...");
-    u8g2.sendBuffer();
+    display.drawString(10, 55, "Initializing...");
+    Serial.println("About to call display.display()");
+    
+    display.display();
+    Serial.println("display.display() called - screen should now show content");
 }
 
 void showStatus(const String& message) {
-    u8g2.clearBuffer();
-    u8g2.setFont(u8g2_font_8x13_tf);
+    display.clear();
+    display.setFont(ArialMT_Plain_10);
     
     // Center text
-    int width = u8g2.getStrWidth(message.c_str());
+    int width = display.getStringWidth(message);
     int x = (128 - width) / 2;
-    u8g2.drawStr(x, 24, message.c_str());
+    display.drawString(x, 24, message);
     
-    u8g2.sendBuffer();
+    display.display();
 }
 
 void showMessage(const String& message, int rssi, float snr) {
-    u8g2.clearBuffer();
-    u8g2.setFont(u8g2_font_6x10_tf);
+    display.clear();
+    display.setFont(ArialMT_Plain_10);
     
     // Header
-    u8g2.drawStr(0, 0, "Received:");
+    display.drawString(0, 0, "Received:");
     
     // Message (truncate if too long)
-    u8g2.setFont(u8g2_font_8x13_tf);
     String displayMsg = message.substring(0, min(16, (int)message.length()));
-    u8g2.drawStr(0, 15, displayMsg.c_str());
+    display.drawString(0, 12, displayMsg);
     
     // Signal quality
-    u8g2.setFont(u8g2_font_6x10_tf);
     String rssiStr = "RSSI: " + String(rssi) + " dBm";
-    u8g2.drawStr(0, 38, rssiStr.c_str());
+    display.drawString(0, 36, rssiStr);
     
     String snrStr = "SNR: " + String(snr, 1) + " dB";
-    u8g2.drawStr(0, 50, snrStr.c_str());
+    display.drawString(0, 48, snrStr);
     
-    u8g2.sendBuffer();
+    display.display();
 }
 
 void showSentMessage(const String& message) {
-    u8g2.clearBuffer();
-    u8g2.setFont(u8g2_font_6x10_tf);
+    display.clear();
+    display.setFont(ArialMT_Plain_10);
     
     // Header
-    u8g2.drawStr(0, 0, "Sent via LoRA:");
+    display.drawString(0, 0, "Sent via LoRA:");
     
     // Message (word wrap for long messages)
-    u8g2.setFont(u8g2_font_8x13_tf);
-    int y = 15;
-    int maxChars = 16;
+    int y = 12;
+    int maxChars = 20;
     
     for (int i = 0; i < message.length(); i += maxChars) {
         String line = message.substring(i, min(i + maxChars, (int)message.length()));
-        u8g2.drawStr(0, y, line.c_str());
-        y += 15;
-        if (y > 50) break;  // Don't overflow screen
+        display.drawString(0, y, line);
+        y += 12;
+        if (y > 52) break;  // Don't overflow screen
     }
     
-    u8g2.sendBuffer();
+    display.display();
 }
 
 void updateStatusDisplay(bool bleConnected, uint8_t syncWord, const String& lastMsg) {
@@ -228,35 +225,35 @@ void updateStatusDisplay(bool bleConnected, uint8_t syncWord, const String& last
     Serial.print(", BLE: ");
     Serial.println(bleConnected ? "Connected" : "Disconnected");
     
-    u8g2.clearBuffer();
-    u8g2.setFont(u8g2_font_6x10_tf);
+    display.clear();
+    display.setFont(ArialMT_Plain_10);
     
     // Mode indicator at top
     String modeStr = "Mode: BLE";
     if (serialModeEnabled) {
         modeStr += "+Serial";
     }
-    u8g2.drawStr(0, 0, modeStr.c_str());
+    display.drawString(0, 0, modeStr);
     
     // BLE status
     String bleStatus = "BLE: " + String(bleConnected ? "Connected" : "Waiting...");
-    u8g2.drawStr(0, 12, bleStatus.c_str());
+    display.drawString(0, 12, bleStatus);
     
     // SyncWord
     String syncStr = "SyncWord: 0x" + String(syncWord, HEX);
     syncStr.toUpperCase();  // Ensure hex is uppercase
-    u8g2.drawStr(0, 24, syncStr.c_str());
+    display.drawString(0, 24, syncStr);
     
     // Last message preview
-    u8g2.drawStr(0, 36, "Last msg:");
+    display.drawString(0, 36, "Last msg:");
     if (lastMsg.length() > 0) {
-        String preview = lastMsg.substring(0, min(16, (int)lastMsg.length()));
-        u8g2.drawStr(0, 48, preview.c_str());
+        String preview = lastMsg.substring(0, min(20, (int)lastMsg.length()));
+        display.drawString(0, 48, preview);
     } else {
-        u8g2.drawStr(0, 48, "(none)");
+        display.drawString(0, 48, "(none)");
     }
     
-    u8g2.sendBuffer();
+    display.display();
 }
 
 /**
@@ -281,16 +278,18 @@ void onLongPress() {
         Serial.println("Entering sleep mode...");
         
         // Show sleep message on display
-        u8g2.clearBuffer();
-        u8g2.setFont(u8g2_font_8x13_tf);
-        int width = u8g2.getStrWidth("Sleep Mode");
+        display.clear();
+        display.setFont(ArialMT_Plain_10);
+        String msg1 = "Sleep Mode";
+        int width = display.getStringWidth(msg1);
         int x = (128 - width) / 2;
-        u8g2.drawStr(x, 24, "Sleep Mode");
-        u8g2.setFont(u8g2_font_6x10_tf);
-        width = u8g2.getStrWidth("Press PRG 3s to wake");
+        display.drawString(x, 20, msg1);
+        
+        String msg2 = "Press PRG 3s to wake";
+        width = display.getStringWidth(msg2);
         x = (128 - width) / 2;
-        u8g2.drawStr(x, 40, "Press PRG 3s to wake");
-        u8g2.sendBuffer();
+        display.drawString(x, 36, msg2);
+        display.display();
         
         delay(2000);
         
@@ -705,6 +704,7 @@ void onGPIOControl(const String& command) {
 }
 
 void setup() {
+    //checkFactoryReturn();
     // Initialize Serial with longer timeout for USB CDC
     Serial.begin(115200);
     
@@ -731,8 +731,28 @@ void setup() {
     digitalWrite(LED_WHITE, LOW);  // Start with LED off
     Serial.println("White LED initialized (GPIO 35)");
     
-    // Initialize Display
-    Serial.println("Initializing display...");
+    // CRITICAL: Power on display BEFORE heltec_setup()
+    Serial.println("Powering on display...");
+    pinMode(VEXT_CTRL, OUTPUT);
+    digitalWrite(VEXT_CTRL, LOW);  // LOW = ON for Heltec V3
+    delay(100);
+    
+    // Initialize Heltec hardware (this sets up display and LoRA)
+    Serial.println("Initializing Heltec hardware...");
+    heltec_setup();
+    Serial.println("Heltec hardware initialized");
+    
+    // Test display immediately
+    Serial.println("Testing display...");
+    display.clear();
+    display.setFont(ArialMT_Plain_10);
+    display.drawString(0, 0, "Display Test");
+    display.display();
+    Serial.println("Display test complete");
+    delay(2000);
+    
+    // Configure display settings
+    Serial.println("Configuring display...");
     initDisplay();
     
     // Show startup screen
@@ -768,15 +788,6 @@ void setup() {
     // Load saved configuration
     uint8_t savedSyncWord = configManager.loadSyncWord();
     String savedDeviceName = configManager.loadDeviceName();  // Load device name
-    
-    // Initialize Heltec hardware (this sets up the radio SPI and other hardware)
-    Serial.println("Initializing Heltec hardware...");
-    heltec_setup();
-    Serial.println("Heltec hardware initialized");
-    
-    // Re-initialize display with our custom settings (heltec_setup may have changed it)
-    initDisplay();
-    showStartupScreen();
     
     // Initialize LoRA
     if (!loraManager.init()) {
@@ -864,6 +875,9 @@ void setup() {
 }
 
 void loop() {
+    // CRITICAL: Call heltec_loop() to keep display and hardware working
+    heltec_loop();
+    
     // Update button manager (must be called frequently)
     buttonManager.update();
     

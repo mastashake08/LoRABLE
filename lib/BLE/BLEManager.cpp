@@ -36,7 +36,8 @@ private:
     CharType charType;
     
     void onWrite(BLECharacteristic *pCharacteristic) {
-        String value = pCharacteristic->getValue();
+        std::string stdValue = pCharacteristic->getValue();
+        String value = String(stdValue.c_str());
         
         if (value.length() > 0) {
             switch(charType) {
@@ -328,7 +329,7 @@ bool BLEManager::init() {
     // Add manufacturer data "Mastashake"
     // Format: Company ID (2 bytes, little-endian) + Data
     // Using 0xFFFF as custom company ID
-    String manufacturerData = "";
+    std::string manufacturerData = "";
     manufacturerData += (char)0xFF;  // Company ID low byte
     manufacturerData += (char)0xFF;  // Company ID high byte
     manufacturerData += "Mastashake"; // Custom data
